@@ -90,5 +90,5 @@ outputs:
     description: "Public endpoint URL of the container"
 
 runs:
-  using: "node20"
+  using: "node24"
   main: "dist/index.js"
