@@ -25643,7 +25643,7 @@ module.exports = {
 
 /***/ }),
 
-/***/ 7799:
+/***/ 461:
 /***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
 "use strict";
@@ -25684,42 +25684,32 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 const core = __importStar(__nccwpck_require__(7484));
 const exec = __importStar(__nccwpck_require__(5236));
-function registryHost(region) {
-    return `rg.${region}.scw.cloud`;
-}
-async function run() {
+async function post() {
+    const registry = core.getState("registry");
+    const logout = core.getState("logout");
+    if (logout !== "true" || !registry) {
+        return;
+    }
     try {
-        const secretKey = core.getInput("secret_key", { required: true });
-        const region = core.getInput("region", { required: false });
-        const namespace = core.getInput("registry_namespace", { required: true });
-        const logout = core.getBooleanInput("logout");
-        const host = registryHost(region);
-        const registry = `${host}/${namespace}`;
-        core.saveState("registry", registry);
-        core.saveState("logout", logout.toString());
-        core.info(`Logging in to Scaleway Container Registry: ${registry}`);
-        core.setSecret(secretKey);
+        core.info(`Logging out of ${registry}`);
         const { exitCode, stderr } = await exec.getExecOutput("docker", [
-            "login",
+            "logout",
             registry,
-            "-u", "nologin",
-            "--password-stdin",
         ], {
-            input: Buffer.from(secretKey),
             silent: true,
             ignoreReturnCode: true,
         });
         if (exitCode !== 0) {
-            throw new Error(`docker login failed (exit code ${exitCode}): ${stderr}`);
+            core.warning(`docker logout failed (exit code ${exitCode}): ${stderr}`);
+            return;
         }
-        core.setOutput("registry", registry);
-        core.info(`Successfully authenticated with ${registry}`);
+        core.info(`Successfully logged out of ${registry}`);
     }
     catch (error) {
-        core.setFailed(error instanceof Error ? error.message : String(error));
+        core.warning(error instanceof Error ? error.message : String(error));
     }
 }
-run();
+post();
 
 
 /***/ }),
@@ -27639,7 +27629,7 @@ module.exports = parseParams
 /******/ 	// startup
 /******/ 	// Load entry module and return exports
 /******/ 	// This entry module is referenced by other modules so it can't be inlined
-/******/ 	var __webpack_exports__ = __nccwpck_require__(7799);
+/******/ 	var __webpack_exports__ = __nccwpck_require__(461);
 /******/ 	module.exports = __webpack_exports__;
 /******/ 	
 /******/ })()

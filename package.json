@@ -5,7 +5,7 @@
   "description": "Reusable GitHub Actions for managing Scaleway cloud resources",
   "scripts": {
     "build": "npm run build:registry-login && npm run build:container-deploy && npm run build:container-manage && npm run build:job-run && npm run build:secret-sync && npm run build:dns-record && npm run build:container-domain",
-    "build:registry-login": "ncc build src/registry-login/index.ts -o registry-login/dist",
+    "build:registry-login": "ncc build src/registry-login/index.ts -o registry-login/dist && ncc build src/registry-login/post.ts -o registry-login/dist/post",
     "build:container-deploy": "ncc build src/container-deploy/index.ts -o container-deploy/dist",
     "build:container-manage": "ncc build src/container-manage/index.ts -o container-manage/dist",
     "build:job-run": "ncc build src/job-run/index.ts -o job-run/dist",

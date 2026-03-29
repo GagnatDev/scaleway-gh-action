@@ -15,6 +15,10 @@ inputs:
   registry_namespace:
     description: "Name of the Container Registry namespace to log in to"
     required: true
+  logout:
+    description: "Log out from the registry at the end of the job to remove stored credentials"
+    required: false
+    default: "true"
 
 outputs:
   registry:
@@ -23,3 +27,4 @@ outputs:
 runs:
   using: "node20"
   main: "dist/index.js"
+  post: "dist/post/index.js"
