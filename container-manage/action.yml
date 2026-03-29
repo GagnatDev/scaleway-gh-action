@@ -1,0 +1,94 @@
+name: "Scaleway Container Manage"
+description: "Create, update, or delete Scaleway Serverless Containers"
+branding:
+  icon: "box"
+  color: "purple"
+
+inputs:
+  action:
+    description: "Action to perform: create, update, or delete"
+    required: true
+  secret_key:
+    description: "Scaleway API secret key"
+    required: true
+  region:
+    description: "Scaleway region (fr-par, nl-ams, pl-waw)"
+    required: false
+    default: "fr-par"
+  namespace_id:
+    description: "UUID of the containers namespace (required for create)"
+    required: false
+  container_id:
+    description: "UUID of the container (required for update/delete)"
+    required: false
+  container_name:
+    description: "Name of the container (required for create)"
+    required: false
+  registry_image:
+    description: "Full registry image URL including tag"
+    required: false
+  deploy:
+    description: "Whether to deploy the container after create/update (default: true)"
+    required: false
+    default: "true"
+  wait:
+    description: "Whether to wait for the container to become ready (default: true)"
+    required: false
+    default: "true"
+  timeout_seconds:
+    description: "Maximum seconds to wait for the container to become ready"
+    required: false
+    default: "300"
+  min_scale:
+    description: "Minimum number of instances"
+    required: false
+    default: "0"
+  max_scale:
+    description: "Maximum number of instances"
+    required: false
+    default: "5"
+  memory_limit:
+    description: "Memory limit in MiB"
+    required: false
+    default: "256"
+  cpu_limit:
+    description: "CPU limit in mvCPU"
+    required: false
+    default: "140"
+  port:
+    description: "Port the container listens on"
+    required: false
+    default: "8080"
+  privacy:
+    description: "Container privacy: public or private"
+    required: false
+    default: "public"
+  protocol:
+    description: "Protocol: http1 or h2c"
+    required: false
+    default: "http1"
+  http_option:
+    description: "HTTP handling: enabled or redirected"
+    required: false
+    default: "enabled"
+  environment_variables:
+    description: "JSON object of environment variables"
+    required: false
+  secret_environment_variables:
+    description: 'JSON array of secret env vars [{"key":"K","value":"V"}]'
+    required: false
+  description:
+    description: "Description of the container"
+    required: false
+
+outputs:
+  container_id:
+    description: "UUID of the container"
+  status:
+    description: "Final container status"
+  endpoint_url:
+    description: "Public endpoint URL of the container"
+
+runs:
+  using: "node20"
+  main: "dist/index.js"

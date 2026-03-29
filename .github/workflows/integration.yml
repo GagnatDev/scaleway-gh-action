@@ -1,0 +1,68 @@
+name: Integration Tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      container_id:
+        description: "UUID of a test serverless container"
+        required: true
+      registry_namespace:
+        description: "Container Registry namespace name"
+        required: true
+      region:
+        description: "Scaleway region"
+        required: false
+        default: "fr-par"
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to Scaleway Container Registry
+        uses: ./registry-login
+        id: login
+        with:
+          secret_key: ${{ secrets.SCW_SECRET_KEY }}
+          region: ${{ inputs.region }}
+          registry_namespace: ${{ inputs.registry_namespace }}
+
+      - name: Build and push a test image
+        run: |
+          echo 'FROM nginx:alpine' > /tmp/Dockerfile.test
+          IMAGE="${{ steps.login.outputs.registry }}/integration-test:${{ github.sha }}"
+          docker build -t "$IMAGE" -f /tmp/Dockerfile.test /tmp
+          docker push "$IMAGE"
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+
+      - name: Deploy container
+        uses: ./container-deploy
+        id: deploy
+        with:
+          secret_key: ${{ secrets.SCW_SECRET_KEY }}
+          region: ${{ inputs.region }}
+          container_id: ${{ inputs.container_id }}
+          registry_image_url: ${{ env.IMAGE }}
+          timeout_seconds: "300"
+
+      - name: Verify deploy outputs
+        run: |
+          echo "Status: ${{ steps.deploy.outputs.status }}"
+          echo "Endpoint: ${{ steps.deploy.outputs.endpoint_url }}"
+          echo "Duration: ${{ steps.deploy.outputs.deploy_duration_seconds }}s"
+
+          if [ "${{ steps.deploy.outputs.status }}" != "ready" ]; then
+            echo "FAIL: expected status=ready"
+            exit 1
+          fi
+
+      - name: Smoke test the endpoint
+        run: |
+          ENDPOINT="${{ steps.deploy.outputs.endpoint_url }}"
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$ENDPOINT" --max-time 30)
+          echo "HTTP status: $STATUS"
+          if [ "$STATUS" -ge 400 ]; then
+            echo "FAIL: endpoint returned HTTP $STATUS"
+            exit 1
+          fi

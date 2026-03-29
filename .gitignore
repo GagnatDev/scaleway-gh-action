@@ -1,0 +1,8 @@
+node_modules/
+dist/
+*.js.map
+*.d.ts
+!src/**/*.d.ts
+
+# Keep compiled action bundles (they must be committed for GitHub Actions)
+!*/dist/

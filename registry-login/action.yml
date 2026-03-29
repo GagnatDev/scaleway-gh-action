@@ -1,0 +1,25 @@
+name: "Scaleway Registry Login"
+description: "Authenticate Docker CLI with your Scaleway Container Registry namespace"
+branding:
+  icon: "log-in"
+  color: "purple"
+
+inputs:
+  secret_key:
+    description: "Scaleway API secret key"
+    required: true
+  region:
+    description: "Scaleway region (fr-par, nl-ams, pl-waw)"
+    required: false
+    default: "fr-par"
+  registry_namespace:
+    description: "Name of the Container Registry namespace to log in to"
+    required: true
+
+outputs:
+  registry:
+    description: "Full registry host URL (e.g. rg.fr-par.scw.cloud/my-namespace)"
+
+runs:
+  using: "node20"
+  main: "dist/index.js"

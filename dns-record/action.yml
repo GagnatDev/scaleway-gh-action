@@ -1,0 +1,38 @@
+name: "Scaleway DNS Record"
+description: "Create, update, or delete DNS records in a Scaleway DNS zone"
+branding:
+  icon: "globe"
+  color: "purple"
+
+inputs:
+  secret_key:
+    description: "Scaleway API secret key"
+    required: true
+  dns_zone:
+    description: "DNS zone to manage (e.g. example.com)"
+    required: true
+  action:
+    description: "Action to perform: add, set, delete, or clear"
+    required: true
+  record_name:
+    description: "Record name (e.g. www, api, or empty for root)"
+    required: false
+    default: ""
+  record_type:
+    description: "Record type (A, AAAA, CNAME, TXT, MX, etc.)"
+    required: true
+  record_data:
+    description: "Record value/data"
+    required: false
+  ttl:
+    description: "TTL in seconds"
+    required: false
+    default: "3600"
+
+outputs:
+  records_changed:
+    description: "Number of records affected"
+
+runs:
+  using: "node20"
+  main: "dist/index.js"

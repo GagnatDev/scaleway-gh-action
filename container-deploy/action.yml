@@ -1,0 +1,60 @@
+name: "Scaleway Container Deploy"
+description: "Update and deploy a Scaleway Serverless Container, then wait until it is ready"
+branding:
+  icon: "upload-cloud"
+  color: "purple"
+
+inputs:
+  secret_key:
+    description: "Scaleway API secret key"
+    required: true
+  region:
+    description: "Scaleway region (fr-par, nl-ams, pl-waw)"
+    required: false
+    default: "fr-par"
+  container_id:
+    description: "UUID of the existing serverless container to deploy"
+    required: true
+  registry_image_url:
+    description: "Full registry image URL including tag (e.g. rg.fr-par.scw.cloud/ns/image:latest)"
+    required: true
+  timeout_seconds:
+    description: "Maximum seconds to wait for the container to become ready"
+    required: false
+    default: "300"
+  min_scale:
+    description: "Minimum number of container instances"
+    required: false
+  max_scale:
+    description: "Maximum number of container instances"
+    required: false
+  memory_limit:
+    description: "Memory limit in MiB"
+    required: false
+  cpu_limit:
+    description: "CPU limit in mvCPU"
+    required: false
+  port:
+    description: "Port the container listens on"
+    required: false
+  environment_variables:
+    description: "JSON object of environment variables"
+    required: false
+  secret_environment_variables:
+    description: 'JSON array of secret env vars, e.g. [{"key":"DB_PASS","value":"xxx"}]'
+    required: false
+  http_option:
+    description: "HTTP handling: enabled or redirected"
+    required: false
+
+outputs:
+  status:
+    description: "Final container status after deploy"
+  endpoint_url:
+    description: "Public endpoint URL of the container"
+  deploy_duration_seconds:
+    description: "How long the deploy took in seconds"
+
+runs:
+  using: "node20"
+  main: "dist/index.js"

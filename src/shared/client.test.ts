@@ -1,0 +1,122 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { ScalewayClient, ScalewayApiError } from "./client";
+
+const mockFetch = vi.fn();
+
+beforeEach(() => {
+  vi.stubGlobal("fetch", mockFetch);
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    json: () => Promise.resolve(body),
+  } as Response;
+}
+
+describe("ScalewayClient", () => {
+  const client = new ScalewayClient({
+    secretKey: "test-secret-key",
+    region: "fr-par",
+  });
+
+  it("builds URLs with region substitution", () => {
+    const url = client.buildUrl("/containers/v1beta1/regions/{region}/containers");
+    expect(url).toBe(
+      "https://api.scaleway.com/containers/v1beta1/regions/fr-par/containers",
+    );
+  });
+
+  it("sends GET requests with auth header", async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse({ id: "abc" }));
+
+    const result = await client.get<{ id: string }>(
+      "/containers/v1beta1/regions/{region}/containers/abc",
+    );
+
+    expect(result.id).toBe("abc");
+    expect(mockFetch).toHaveBeenCalledOnce();
+
+    const [url, opts] = mockFetch.mock.calls[0];
+    expect(url).toContain("fr-par");
+    expect(opts.method).toBe("GET");
+    expect(opts.headers["X-Auth-Token"]).toBe("test-secret-key");
+  });
+
+  it("sends POST requests with JSON body", async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse({ id: "new-123" }, 201));
+
+    const result = await client.post<{ id: string }>(
+      "/containers/v1beta1/regions/{region}/containers",
+      { name: "my-container" },
+    );
+
+    expect(result.id).toBe("new-123");
+    const [, opts] = mockFetch.mock.calls[0];
+    expect(opts.method).toBe("POST");
+    expect(JSON.parse(opts.body)).toEqual({ name: "my-container" });
+  });
+
+  it("handles 204 No Content for DELETE", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 204,
+      json: () => Promise.reject(new Error("no json")),
+    } as unknown as Response);
+
+    const result = await client.delete("/containers/v1beta1/regions/{region}/containers/abc");
+    expect(result).toEqual({});
+  });
+
+  it("throws ScalewayApiError on 4xx", async () => {
+    mockFetch.mockResolvedValueOnce(
+      jsonResponse({ message: "Container not found", type: "not_found" }, 404),
+    );
+
+    await expect(
+      client.get("/containers/v1beta1/regions/{region}/containers/bad"),
+    ).rejects.toThrow(ScalewayApiError);
+
+    try {
+      mockFetch.mockResolvedValueOnce(
+        jsonResponse({ message: "Container not found", type: "not_found" }, 404),
+      );
+      await client.get("/containers/v1beta1/regions/{region}/containers/bad");
+    } catch (err) {
+      expect(err).toBeInstanceOf(ScalewayApiError);
+      expect((err as ScalewayApiError).statusCode).toBe(404);
+      expect((err as ScalewayApiError).message).toBe("Container not found");
+    }
+  });
+
+  it("retries on 5xx errors", async () => {
+    mockFetch
+      .mockResolvedValueOnce(jsonResponse({ message: "Internal error" }, 500))
+      .mockResolvedValueOnce(jsonResponse({ id: "recovered" }));
+
+    const result = await client.get<{ id: string }>(
+      "/containers/v1beta1/regions/{region}/containers/abc",
+    );
+
+    expect(result.id).toBe("recovered");
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries on 429 rate limit", async () => {
+    mockFetch
+      .mockResolvedValueOnce(jsonResponse({ message: "Rate limited" }, 429))
+      .mockResolvedValueOnce(jsonResponse({ id: "ok" }));
+
+    const result = await client.get<{ id: string }>(
+      "/containers/v1beta1/regions/{region}/containers/abc",
+    );
+
+    expect(result.id).toBe("ok");
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+});

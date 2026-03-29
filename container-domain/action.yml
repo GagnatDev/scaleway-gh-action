@@ -1,0 +1,38 @@
+name: "Scaleway Container Domain"
+description: "Attach or detach a custom domain to/from a Scaleway Serverless Container"
+branding:
+  icon: "link"
+  color: "purple"
+
+inputs:
+  action:
+    description: "Action to perform: attach or detach"
+    required: true
+  secret_key:
+    description: "Scaleway API secret key"
+    required: true
+  region:
+    description: "Scaleway region (fr-par, nl-ams, pl-waw)"
+    required: false
+    default: "fr-par"
+  container_id:
+    description: "UUID of the serverless container"
+    required: true
+  hostname:
+    description: "Custom domain hostname to attach (e.g. api.example.com). Required for attach."
+    required: false
+  domain_id:
+    description: "UUID of the domain mapping to detach. Required for detach."
+    required: false
+
+outputs:
+  domain_id:
+    description: "UUID of the domain mapping"
+  url:
+    description: "URL of the domain mapping"
+  status:
+    description: "Status of the domain mapping"
+
+runs:
+  using: "node20"
+  main: "dist/index.js"

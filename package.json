@@ -1,0 +1,26 @@
+{
+  "name": "scaleway-gh-action",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Reusable GitHub Actions for managing Scaleway cloud resources",
+  "scripts": {
+    "build": "npm run build:registry-login && npm run build:container-deploy && npm run build:container-manage && npm run build:job-run && npm run build:secret-sync && npm run build:dns-record && npm run build:container-domain",
+    "build:registry-login": "ncc build src/registry-login/index.ts -o registry-login/dist",
+    "build:container-deploy": "ncc build src/container-deploy/index.ts -o container-deploy/dist",
+    "build:container-manage": "ncc build src/container-manage/index.ts -o container-manage/dist",
+    "build:job-run": "ncc build src/job-run/index.ts -o job-run/dist",
+    "build:secret-sync": "ncc build src/secret-sync/index.ts -o secret-sync/dist",
+    "build:dns-record": "ncc build src/dns-record/index.ts -o dns-record/dist",
+    "build:container-domain": "ncc build src/container-domain/index.ts -o container-domain/dist",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@actions/core": "^1.11.1",
+    "@actions/exec": "^1.1.1",
+    "@types/node": "^20.11.0",
+    "@vercel/ncc": "^0.38.3",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}

@@ -1,0 +1,49 @@
+name: "Scaleway Job Run"
+description: "Start a Scaleway Serverless Job and optionally wait for completion"
+branding:
+  icon: "play"
+  color: "purple"
+
+inputs:
+  secret_key:
+    description: "Scaleway API secret key"
+    required: true
+  region:
+    description: "Scaleway region (fr-par, nl-ams, pl-waw)"
+    required: false
+    default: "fr-par"
+  job_definition_id:
+    description: "UUID of the job definition to run"
+    required: true
+  wait:
+    description: "Whether to wait for the job to complete (default: true)"
+    required: false
+    default: "true"
+  timeout_seconds:
+    description: "Maximum seconds to wait for the job to complete"
+    required: false
+    default: "600"
+  environment_variables:
+    description: "JSON object of environment variables to override for this run"
+    required: false
+  command:
+    description: "Command to override for this run"
+    required: false
+  memory_limit:
+    description: "Memory limit in MiB for this run"
+    required: false
+  cpu_limit:
+    description: "CPU limit in mvCPU for this run"
+    required: false
+
+outputs:
+  job_run_id:
+    description: "UUID of the job run"
+  status:
+    description: "Final status of the job run"
+  duration_seconds:
+    description: "How long the job ran in seconds"
+
+runs:
+  using: "node20"
+  main: "dist/index.js"

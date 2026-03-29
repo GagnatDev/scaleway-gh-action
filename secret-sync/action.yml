@@ -1,0 +1,36 @@
+name: "Scaleway Secret Sync"
+description: "Create or update a secret in Scaleway Secret Manager"
+branding:
+  icon: "lock"
+  color: "purple"
+
+inputs:
+  secret_key:
+    description: "Scaleway API secret key"
+    required: true
+  region:
+    description: "Scaleway region (fr-par, nl-ams, pl-waw)"
+    required: false
+    default: "fr-par"
+  project_id:
+    description: "Scaleway Project ID"
+    required: true
+  secret_name:
+    description: "Name of the secret to create or update"
+    required: true
+  secret_value:
+    description: "Value to store in the secret (will be base64-encoded)"
+    required: true
+  description:
+    description: "Description of the secret"
+    required: false
+
+outputs:
+  secret_id:
+    description: "UUID of the secret"
+  version_number:
+    description: "Revision number of the newly created version"
+
+runs:
+  using: "node20"
+  main: "dist/index.js"
