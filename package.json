@@ -2,9 +2,10 @@
   "name": "scaleway-gh-action",
   "version": "1.0.0",
   "private": true,
+  "packageManager": "pnpm@10.33.0",
   "description": "Reusable GitHub Actions for managing Scaleway cloud resources",
   "scripts": {
-    "build": "npm run build:registry-login && npm run build:container-deploy && npm run build:container-manage && npm run build:job-run && npm run build:secret-sync && npm run build:dns-record && npm run build:container-domain",
+    "build": "pnpm run build:registry-login && pnpm run build:container-deploy && pnpm run build:container-manage && pnpm run build:job-run && pnpm run build:secret-sync && pnpm run build:dns-record && pnpm run build:container-domain",
     "build:registry-login": "ncc build src/registry-login/index.ts -o registry-login/dist && ncc build src/registry-login/post.ts -o registry-login/dist/post",
     "build:container-deploy": "ncc build src/container-deploy/index.ts -o container-deploy/dist",
     "build:container-manage": "ncc build src/container-manage/index.ts -o container-manage/dist",

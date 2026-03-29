@@ -250,9 +250,9 @@ Attach or detach a custom domain to/from a Serverless Container. When attaching,
 ## Development
 
 ```bash
-npm install
-npm test          # Run unit tests
-npm run build     # Compile all actions with ncc
+pnpm install
+pnpm test          # Run unit tests
+pnpm run build     # Compile all actions with ncc
 ```
 
 Each action's source lives in `src/<action-name>/index.ts` and shares a common Scaleway API client from `src/shared/`.
