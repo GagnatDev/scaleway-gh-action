@@ -168,6 +168,59 @@ export interface RequestOptions {
   body?: unknown;
   /** Override the region for this request (useful for global APIs) */
   regionOverride?: string;
+  /**
+   * When true, a failed HTTP response is logged with core.debug instead of core.error
+   * (for callers that retry expected failures such as transient resource state).
+   */
+  logFailureAsDebug?: boolean;
+}
+
+/** True when Scaleway rejected the request because the resource is busy (e.g. still applying PATCH). */
+export function isTransientResourceError(error: unknown): boolean {
+  if (!(error instanceof ScalewayApiError)) return false;
+  const msg = error.message.toLowerCase();
+  if (msg.includes("transient state")) return true;
+  if (error.statusCode === 409) return true;
+  return false;
+}
+
+const DEPLOY_TRANSIENT_MAX_ATTEMPTS = 15;
+const DEPLOY_TRANSIENT_INITIAL_DELAY_MS = 2_000;
+const DEPLOY_TRANSIENT_MAX_DELAY_MS = 30_000;
+
+/**
+ * POST to trigger a serverless container deploy, retrying when the API returns
+ * "resource is in a transient state" (common immediately after PATCH).
+ */
+export async function postContainerDeploy(
+  client: ScalewayClient,
+  path: string,
+  body?: unknown,
+): Promise<unknown> {
+  let delayMs = DEPLOY_TRANSIENT_INITIAL_DELAY_MS;
+
+  for (let attempt = 1; attempt <= DEPLOY_TRANSIENT_MAX_ATTEMPTS; attempt++) {
+    try {
+      return await client.request<unknown>({
+        method: "POST",
+        path,
+        body,
+        logFailureAsDebug: attempt < DEPLOY_TRANSIENT_MAX_ATTEMPTS,
+      });
+    } catch (error) {
+      if (!isTransientResourceError(error) || attempt >= DEPLOY_TRANSIENT_MAX_ATTEMPTS) {
+        throw error;
+      }
+      core.info(
+        `Deploy not accepted yet (resource transient); waiting ${Math.round(delayMs / 1000)}s before retry ` +
+          `(${attempt}/${DEPLOY_TRANSIENT_MAX_ATTEMPTS})...`,
+      );
+      await sleep(delayMs);
+      delayMs = Math.min(Math.round(delayMs * 1.5), DEPLOY_TRANSIENT_MAX_DELAY_MS);
+    }
+  }
+
+  throw new Error("postContainerDeploy: exhausted retries");
 }
 
 export class ScalewayClient {
@@ -223,7 +276,11 @@ export class ScalewayClient {
             method: opts.method,
             path: opts.path,
           });
-          core.error(`Scaleway API error: ${detailMsg}`);
+          if (opts.logFailureAsDebug) {
+            core.debug(`Scaleway API error: ${detailMsg}`);
+          } else {
+            core.error(`Scaleway API error: ${detailMsg}`);
+          }
           try {
             core.debug(`[scaleway] Error response body: ${JSON.stringify(data)}`);
           } catch {

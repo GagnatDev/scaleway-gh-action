@@ -1,5 +1,5 @@
 import * as core from "@actions/core";
-import { ScalewayClient, pollStatus } from "../shared";
+import { ScalewayClient, pollStatus, postContainerDeploy } from "../shared";
 import type { Container, ScalewayRegion } from "../shared/types";
 
 const CONTAINERS_API = "/containers/v1beta1/regions/{region}/containers";
@@ -61,7 +61,7 @@ async function run(): Promise<void> {
 
     // Step 2: Trigger deployment
     core.info("Triggering deployment...");
-    await client.post(`${CONTAINERS_API}/${containerId}/deploy`, {});
+    await postContainerDeploy(client, `${CONTAINERS_API}/${containerId}/deploy`, {});
 
     // Step 3: Poll until ready
     core.info(`Waiting up to ${timeoutSeconds}s for container to become ready...`);

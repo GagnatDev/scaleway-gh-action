@@ -3,6 +3,8 @@ import {
   ScalewayClient,
   ScalewayApiError,
   formatScalewayErrorMessage,
+  isTransientResourceError,
+  postContainerDeploy,
 } from "./client";
 
 const mockFetch = vi.fn();
@@ -184,5 +186,54 @@ describe("ScalewayClient", () => {
 
     expect(result.id).toBe("ok");
     expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("isTransientResourceError matches Scaleway transient message and 409", () => {
+    const transientMsg = new ScalewayApiError(
+      "[POST /x] resource is in a transient state — resource: container (id)",
+      400,
+      {},
+      { method: "POST", path: "/x" },
+    );
+    expect(isTransientResourceError(transientMsg)).toBe(true);
+
+    const conflict = new ScalewayApiError("[POST /x] conflict", 409, {}, {
+      method: "POST",
+      path: "/x",
+    });
+    expect(isTransientResourceError(conflict)).toBe(true);
+
+    expect(isTransientResourceError(new Error("other"))).toBe(false);
+    const notFound = new ScalewayApiError("missing", 404, {}, undefined);
+    expect(isTransientResourceError(notFound)).toBe(false);
+  });
+
+  it("postContainerDeploy retries on transient state then succeeds", async () => {
+    vi.useFakeTimers();
+    try {
+      const deployPath =
+        "/containers/v1beta1/regions/{region}/containers/c1/deploy";
+      mockFetch
+        .mockResolvedValueOnce(
+          jsonResponse(
+            {
+              message: "resource is in a transient state",
+              type: "transient_state",
+              resource: "container",
+              resource_id: "c1",
+            },
+            400,
+          ),
+        )
+        .mockResolvedValueOnce(jsonResponse({}, 200));
+
+      const done = postContainerDeploy(client, deployPath, {});
+      await vi.advanceTimersByTimeAsync(3_000);
+      await done;
+
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -1,5 +1,5 @@
 import * as core from "@actions/core";
-import { ScalewayClient, pollStatus } from "../shared";
+import { ScalewayClient, pollStatus, postContainerDeploy } from "../shared";
 import type { Container, ScalewayRegion } from "../shared/types";
 
 const CONTAINERS_API = "/containers/v1beta1/regions/{region}/containers";
@@ -52,7 +52,7 @@ async function createContainer(client: ScalewayClient): Promise<void> {
   const shouldDeploy = core.getInput("deploy") !== "false";
   if (shouldDeploy) {
     core.info("Triggering deployment...");
-    await client.post(`${CONTAINERS_API}/${container.id}/deploy`, {});
+    await postContainerDeploy(client, `${CONTAINERS_API}/${container.id}/deploy`, {});
 
     const shouldWait = core.getInput("wait") !== "false";
     if (shouldWait) {
@@ -99,7 +99,7 @@ async function updateContainer(client: ScalewayClient): Promise<void> {
   const shouldDeploy = core.getInput("deploy") !== "false";
   if (shouldDeploy) {
     core.info("Triggering deployment...");
-    await client.post(`${CONTAINERS_API}/${containerId}/deploy`, {});
+    await postContainerDeploy(client, `${CONTAINERS_API}/${containerId}/deploy`, {});
 
     const shouldWait = core.getInput("wait") !== "false";
     if (shouldWait) {
