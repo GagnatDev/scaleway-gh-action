@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { ScalewayClient, ScalewayApiError } from "./client";
+import {
+  ScalewayClient,
+  ScalewayApiError,
+  formatScalewayErrorMessage,
+} from "./client";
 
 const mockFetch = vi.fn();
 
@@ -90,8 +94,70 @@ describe("ScalewayClient", () => {
     } catch (err) {
       expect(err).toBeInstanceOf(ScalewayApiError);
       expect((err as ScalewayApiError).statusCode).toBe(404);
-      expect((err as ScalewayApiError).message).toBe("Container not found");
+      expect((err as ScalewayApiError).message).toBe(
+        "[GET /containers/v1beta1/regions/{region}/containers/bad] Container not found",
+      );
     }
+  });
+
+  it("includes invalid_arguments details in the error message", async () => {
+    mockFetch.mockResolvedValueOnce(
+      jsonResponse(
+        {
+          message: "invalid argument(s)",
+          type: "invalid_arguments",
+          details: [
+            {
+              argument_name: "registry_image",
+              reason: "format",
+              help_message: "must be a valid container registry URL",
+            },
+          ],
+        },
+        400,
+      ),
+    );
+
+    await expect(
+      client.post("/containers/v1beta1/regions/{region}/containers", {}),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining("registry_image"),
+    });
+
+    try {
+      mockFetch.mockResolvedValueOnce(
+        jsonResponse(
+          {
+            message: "invalid argument(s)",
+            type: "invalid_arguments",
+            details: [
+              {
+                argument_name: "registry_image",
+                reason: "format",
+                help_message: "must be a valid container registry URL",
+              },
+            ],
+          },
+          400,
+        ),
+      );
+      await client.post("/containers/v1beta1/regions/{region}/containers", {});
+    } catch (err) {
+      expect((err as ScalewayApiError).message).toContain("registry_image");
+      expect((err as ScalewayApiError).message).toContain("must be a valid container registry URL");
+    }
+  });
+
+  it("formatScalewayErrorMessage surfaces field maps from instance-style errors", () => {
+    const msg = formatScalewayErrorMessage(
+      {
+        message: "Bad request",
+        fields: { name: ["already exists"] },
+      },
+      400,
+    );
+    expect(msg).toContain("name:");
+    expect(msg).toContain("already exists");
   });
 
   it("retries on 5xx errors", async () => {

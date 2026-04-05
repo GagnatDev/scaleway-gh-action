@@ -25801,8 +25801,117 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.ScalewayApiError = exports.ScalewayClient = void 0;
+exports.formatScalewayErrorMessage = formatScalewayErrorMessage;
 const core = __importStar(__nccwpck_require__(6966));
 const API_BASE = "https://api.scaleway.com";
+function formatInvalidArgumentDetails(details) {
+    return details
+        .map((d) => {
+        const name = d.argument_name ?? "(unknown argument)";
+        let part = name;
+        switch (d.reason) {
+            case "unknown":
+                part += " is invalid for unexpected reason";
+                break;
+            case "required":
+                part += " is required";
+                break;
+            case "format":
+                part += " is wrongly formatted";
+                break;
+            case "constraint":
+                part += " does not respect constraint";
+                break;
+            default:
+                if (d.reason)
+                    part += ` (${d.reason})`;
+        }
+        if (d.help_message)
+            part += `: ${d.help_message}`;
+        return part;
+    })
+        .join("; ");
+}
+function formatPermissionDetails(details) {
+    return details
+        .map((d) => {
+        const action = d.action ?? "?";
+        const resource = d.resource ?? "?";
+        return `${action} on ${resource}`;
+    })
+        .join("; ");
+}
+function formatQuotaDetails(details) {
+    return details
+        .map((d) => {
+        const res = d.resource ?? "resource";
+        return `${res} quota (${d.current ?? "?"}/${d.quota ?? "?"})`;
+    })
+        .join("; ");
+}
+/**
+ * Build a log-friendly message from Scaleway JSON error bodies.
+ * Many APIs return only a generic `message` (e.g. "invalid argument(s)") while
+ * the actionable detail lives in `details`, `fields`, or `type`.
+ */
+function formatScalewayErrorMessage(data, httpStatus) {
+    if (data === null || typeof data !== "object") {
+        return `HTTP ${httpStatus}`;
+    }
+    const body = data;
+    const segments = [];
+    if (body.message)
+        segments.push(body.message);
+    const t = body.type;
+    if (t === "invalid_arguments" && Array.isArray(body.details)) {
+        const parsed = body.details.filter((x) => x !== null && typeof x === "object" && "argument_name" in x);
+        if (parsed.length > 0) {
+            segments.push(formatInvalidArgumentDetails(parsed));
+        }
+    }
+    else if (t === "permissions_denied" && Array.isArray(body.details)) {
+        const parsed = body.details.filter((x) => x !== null && typeof x === "object" && ("resource" in x || "action" in x));
+        if (parsed.length > 0) {
+            segments.push(formatPermissionDetails(parsed));
+        }
+    }
+    else if (t === "quotas_exceeded" && Array.isArray(body.details)) {
+        const parsed = body.details.filter((x) => x !== null && typeof x === "object" && "resource" in x);
+        if (parsed.length > 0) {
+            segments.push(formatQuotaDetails(parsed));
+        }
+    }
+    else if (Array.isArray(body.details) && body.details.length > 0 && !t) {
+        const parsed = body.details.filter((x) => x !== null && typeof x === "object" && "argument_name" in x);
+        if (parsed.length > 0) {
+            segments.push(formatInvalidArgumentDetails(parsed));
+        }
+    }
+    if (body.fields && Object.keys(body.fields).length > 0) {
+        const fieldStr = Object.entries(body.fields)
+            .map(([k, msgs]) => `${k}: ${msgs.join(", ")}`)
+            .join("; ");
+        segments.push(fieldStr);
+    }
+    if (body.resource && body.resource_id) {
+        segments.push(`resource: ${body.resource} (${body.resource_id})`);
+    }
+    if (segments.length === 0) {
+        try {
+            return `HTTP ${httpStatus}: ${JSON.stringify(data)}`;
+        }
+        catch {
+            return `HTTP ${httpStatus}`;
+        }
+    }
+    const joined = segments.join(" — ");
+    if (t === "invalid_arguments" &&
+        Array.isArray(body.details) &&
+        body.details.length === 0) {
+        return `${joined} — (no detail entries; raw: ${JSON.stringify(data)})`;
+    }
+    return joined;
+}
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1000;
 class ScalewayClient {
@@ -25843,9 +25952,19 @@ class ScalewayClient {
                 }
                 const data = await response.json();
                 if (!response.ok) {
-                    const msg = data.message ??
-                        `HTTP ${response.status}`;
-                    const err = new ScalewayApiError(msg, response.status, data);
+                    const detailMsg = formatScalewayErrorMessage(data, response.status);
+                    const msg = `[${opts.method} ${opts.path}] ${detailMsg}`;
+                    const err = new ScalewayApiError(msg, response.status, data, {
+                        method: opts.method,
+                        path: opts.path,
+                    });
+                    core.error(`Scaleway API error: ${detailMsg}`);
+                    try {
+                        core.debug(`[scaleway] Error response body: ${JSON.stringify(data)}`);
+                    }
+                    catch {
+                        /* ignore */
+                    }
                     // Only retry on 429 or 5xx
                     if (response.status === 429 || response.status >= 500) {
                         lastError = err;
@@ -25890,10 +26009,12 @@ exports.ScalewayClient = ScalewayClient;
 class ScalewayApiError extends Error {
     statusCode;
     response;
-    constructor(message, statusCode, response) {
+    request;
+    constructor(message, statusCode, response, request) {
         super(message);
         this.statusCode = statusCode;
         this.response = response;
+        this.request = request;
         this.name = "ScalewayApiError";
     }
 }
