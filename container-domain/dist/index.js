@@ -25644,9 +25644,10 @@ module.exports = {
 /***/ }),
 
 /***/ 6209:
-/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+/***/ (function(module, exports, __nccwpck_require__) {
 
 "use strict";
+/* module decorator */ module = __nccwpck_require__.nmd(module);
 
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
@@ -25682,6 +25683,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.run = run;
 const core = __importStar(__nccwpck_require__(6966));
 const shared_1 = __nccwpck_require__(6686);
 const DOMAINS_API = "/containers/v1beta1/regions/{region}/domains";
@@ -25717,11 +25719,22 @@ async function detachDomain(client) {
     core.setOutput("status", "deleted");
     core.info(`Domain ${domainId} detached`);
 }
+/**
+ * container-domain action entry point.
+ *
+ * Dispatches to one of two sub-operations based on the `action` input:
+ *   - "attach": creates a domain mapping and polls until DNS propagation and
+ *     TLS certificate provisioning complete (up to 5 minutes).
+ *   - "detach": deletes an existing domain mapping immediately.
+ *
+ * Outputs for attach: domain_id, url, status.
+ * Outputs for detach: domain_id, status="deleted".
+ */
 async function run() {
     try {
         const action = core.getInput("action", { required: true });
         const secretKey = core.getInput("secret_key", { required: true });
-        const region = core.getInput("region");
+        const region = (0, shared_1.validateRegion)(core.getInput("region"));
         core.setSecret(secretKey);
         const client = new shared_1.ScalewayClient({ secretKey, region });
         switch (action) {
@@ -25739,7 +25752,9 @@ async function run() {
         core.setFailed(error instanceof Error ? error.message : String(error));
     }
 }
-run();
+if (__nccwpck_require__.c[__nccwpck_require__.s] === module) {
+    run();
+}
 
 
 /***/ }),
@@ -25785,6 +25800,8 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.ScalewayApiError = exports.ScalewayClient = void 0;
 exports.formatScalewayErrorMessage = formatScalewayErrorMessage;
+exports.isTransientResourceError = isTransientResourceError;
+exports.postContainerDeploy = postContainerDeploy;
 const core = __importStar(__nccwpck_require__(6966));
 const API_BASE = "https://api.scaleway.com";
 function formatInvalidArgumentDetails(details) {
@@ -25895,8 +25912,68 @@ function formatScalewayErrorMessage(data, httpStatus) {
     }
     return joined;
 }
+/** Number of attempts for a single request before giving up (covers 429 and 5xx). */
 const MAX_RETRIES = 3;
+/** Base delay in ms; doubles on each retry (1 s → 2 s → 4 s). */
 const RETRY_DELAY_MS = 1000;
+/** True when Scaleway rejected the request because the resource is busy (e.g. still applying PATCH). */
+function isTransientResourceError(error) {
+    if (!(error instanceof ScalewayApiError))
+        return false;
+    const msg = error.message.toLowerCase();
+    if (msg.includes("transient state"))
+        return true;
+    if (error.statusCode === 409)
+        return true;
+    return false;
+}
+/**
+ * Max deploy-trigger attempts. Higher than MAX_RETRIES because Scaleway can
+ * hold a container in a transient state for up to ~30 s after a config PATCH.
+ */
+const DEPLOY_TRANSIENT_MAX_ATTEMPTS = 15;
+/** Initial back-off before the first deploy retry (ms). */
+const DEPLOY_TRANSIENT_INITIAL_DELAY_MS = 2_000;
+/** Cap on per-retry delay to prevent excessive waits (ms). */
+const DEPLOY_TRANSIENT_MAX_DELAY_MS = 30_000;
+/**
+ * POST to trigger a serverless container deploy, retrying when the API returns
+ * "resource is in a transient state" (common immediately after PATCH).
+ */
+async function postContainerDeploy(client, path, body) {
+    let delayMs = DEPLOY_TRANSIENT_INITIAL_DELAY_MS;
+    for (let attempt = 1; attempt <= DEPLOY_TRANSIENT_MAX_ATTEMPTS; attempt++) {
+        try {
+            return await client.request({
+                method: "POST",
+                path,
+                body,
+                logFailureAsDebug: attempt < DEPLOY_TRANSIENT_MAX_ATTEMPTS,
+            });
+        }
+        catch (error) {
+            if (!isTransientResourceError(error) || attempt >= DEPLOY_TRANSIENT_MAX_ATTEMPTS) {
+                throw error;
+            }
+            core.info(`Deploy not accepted yet (resource transient); waiting ${Math.round(delayMs / 1000)}s before retry ` +
+                `(${attempt}/${DEPLOY_TRANSIENT_MAX_ATTEMPTS})...`);
+            await sleep(delayMs);
+            delayMs = Math.min(Math.round(delayMs * 1.5), DEPLOY_TRANSIENT_MAX_DELAY_MS);
+        }
+    }
+    throw new Error("postContainerDeploy: exhausted retries");
+}
+/**
+ * HTTP client for the Scaleway API.
+ *
+ * Wraps `fetch` with:
+ * - Automatic `X-Auth-Token` authentication.
+ * - Retry on `429 Too Many Requests` and `5xx` errors (up to MAX_RETRIES
+ *   attempts with exponential back-off starting at RETRY_DELAY_MS).
+ * - Network errors (fetch throws) are also retried.
+ * - All other HTTP errors (4xx except 429) are thrown immediately as
+ *   `ScalewayApiError` without retrying.
+ */
 class ScalewayClient {
     secretKey;
     region;
@@ -25915,6 +25992,12 @@ class ScalewayClient {
         const resolved = path.replace("{region}", this.region);
         return `${API_BASE}${resolved}`;
     }
+    /**
+     * Execute an authenticated HTTP request with retry logic.
+     *
+     * Set `opts.logFailureAsDebug` to suppress the `core.error` log on failure
+     * (useful for callers that retry expected transient errors themselves).
+     */
     async request(opts) {
         const url = this.buildUrl(opts.path);
         const headers = {
@@ -25941,7 +26024,12 @@ class ScalewayClient {
                         method: opts.method,
                         path: opts.path,
                     });
-                    core.error(`Scaleway API error: ${detailMsg}`);
+                    if (opts.logFailureAsDebug) {
+                        core.debug(`Scaleway API error: ${detailMsg}`);
+                    }
+                    else {
+                        core.error(`Scaleway API error: ${detailMsg}`);
+                    }
                     try {
                         core.debug(`[scaleway] Error response body: ${JSON.stringify(data)}`);
                     }
@@ -26029,13 +26117,102 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.pollStatus = exports.ScalewayApiError = exports.ScalewayClient = void 0;
+exports.validateRegion = exports.getOptionalJsonInput = exports.getOptionalStringInput = exports.getOptionalIntInput = exports.pollStatus = exports.isTransientResourceError = exports.postContainerDeploy = exports.ScalewayApiError = exports.ScalewayClient = void 0;
 var client_1 = __nccwpck_require__(9427);
 Object.defineProperty(exports, "ScalewayClient", ({ enumerable: true, get: function () { return client_1.ScalewayClient; } }));
 Object.defineProperty(exports, "ScalewayApiError", ({ enumerable: true, get: function () { return client_1.ScalewayApiError; } }));
+Object.defineProperty(exports, "postContainerDeploy", ({ enumerable: true, get: function () { return client_1.postContainerDeploy; } }));
+Object.defineProperty(exports, "isTransientResourceError", ({ enumerable: true, get: function () { return client_1.isTransientResourceError; } }));
 var poller_1 = __nccwpck_require__(9634);
 Object.defineProperty(exports, "pollStatus", ({ enumerable: true, get: function () { return poller_1.pollStatus; } }));
+var inputs_1 = __nccwpck_require__(3341);
+Object.defineProperty(exports, "getOptionalIntInput", ({ enumerable: true, get: function () { return inputs_1.getOptionalIntInput; } }));
+Object.defineProperty(exports, "getOptionalStringInput", ({ enumerable: true, get: function () { return inputs_1.getOptionalStringInput; } }));
+Object.defineProperty(exports, "getOptionalJsonInput", ({ enumerable: true, get: function () { return inputs_1.getOptionalJsonInput; } }));
+var validation_1 = __nccwpck_require__(1743);
+Object.defineProperty(exports, "validateRegion", ({ enumerable: true, get: function () { return validation_1.validateRegion; } }));
 __exportStar(__nccwpck_require__(2535), exports);
+
+
+/***/ }),
+
+/***/ 3341:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.getOptionalIntInput = getOptionalIntInput;
+exports.getOptionalStringInput = getOptionalStringInput;
+exports.getOptionalJsonInput = getOptionalJsonInput;
+/**
+ * Helpers for reading optional GitHub Actions inputs.
+ *
+ * Each function returns `undefined` when the input is absent or empty so
+ * callers can do a simple `if (value !== undefined)` guard before including
+ * the field in a request body.
+ */
+const core = __importStar(__nccwpck_require__(6966));
+/** Returns the input parsed as an integer, or `undefined` if the input is empty. */
+function getOptionalIntInput(name) {
+    const v = core.getInput(name);
+    return v ? parseInt(v, 10) : undefined;
+}
+/** Returns the input string, or `undefined` if the input is empty. */
+function getOptionalStringInput(name) {
+    const v = core.getInput(name);
+    return v || undefined;
+}
+/**
+ * Returns the input parsed as JSON, or `undefined` if the input is empty.
+ * Logs a `core.warning` and returns `undefined` when the input is non-empty
+ * but not valid JSON.
+ */
+function getOptionalJsonInput(name) {
+    const v = core.getInput(name);
+    if (!v)
+        return undefined;
+    try {
+        return JSON.parse(v);
+    }
+    catch {
+        core.warning(`Failed to parse ${name} as JSON, skipping`);
+        return undefined;
+    }
+}
 
 
 /***/ }),
@@ -26083,8 +26260,19 @@ exports.pollStatus = pollStatus;
 const core = __importStar(__nccwpck_require__(6966));
 const DEFAULT_INTERVAL_MS = 5_000;
 /**
- * Poll a Scaleway GET endpoint until the status field matches a success or
- * failure value, or the timeout is exceeded.
+ * Poll a Scaleway GET endpoint until a terminal status is reached.
+ *
+ * On each iteration the response JSON is inspected for `options.statusField`
+ * (default: `"status"`). If the field is absent the status is treated as
+ * `"unknown"` and polling continues. Once a success status is seen the result
+ * is returned; once a failure status is seen an error is thrown immediately.
+ * If `timeoutMs` elapses before any terminal status is reached an error is
+ * also thrown.
+ *
+ * @param client  An authenticated ScalewayClient used for GET requests.
+ * @param options Poll configuration — URL, status sets, timeout, and interval.
+ * @returns       A PollResult containing the terminal status and the full
+ *                response body typed as T.
  */
 async function pollStatus(client, options) {
     const { url, statusField = "status", successStatuses, failureStatuses, timeoutMs, intervalMs = DEFAULT_INTERVAL_MS, } = options;
@@ -26122,7 +26310,38 @@ async function pollStatus(client, options) {
 
 "use strict";
 
+/**
+ * Shared TypeScript interfaces for Scaleway API resources.
+ *
+ * Each interface maps to a resource returned or accepted by a Scaleway API endpoint.
+ * See https://www.scaleway.com/en/developers/api/ for authoritative field documentation.
+ */
 Object.defineProperty(exports, "__esModule", ({ value: true }));
+
+
+/***/ }),
+
+/***/ 1743:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.validateRegion = validateRegion;
+const VALID_REGIONS = ["fr-par", "nl-ams", "pl-waw"];
+/**
+ * Validate and narrow a raw string to a `ScalewayRegion`.
+ *
+ * Throws a descriptive error when the value is not one of the supported
+ * regions (`fr-par`, `nl-ams`, `pl-waw`), so callers fail fast with a
+ * useful message rather than a cryptic API error deep in the call stack.
+ */
+function validateRegion(value) {
+    if (!VALID_REGIONS.includes(value)) {
+        throw new Error(`Invalid region "${value}". Must be one of: ${VALID_REGIONS.join(", ")}`);
+    }
+    return value;
+}
 
 
 /***/ }),
@@ -28014,8 +28233,8 @@ module.exports = parseParams
 /******/ 		}
 /******/ 		// Create a new module (and put it into the cache)
 /******/ 		var module = __webpack_module_cache__[moduleId] = {
-/******/ 			// no module.id needed
-/******/ 			// no module.loaded needed
+/******/ 			id: moduleId,
+/******/ 			loaded: false,
 /******/ 			exports: {}
 /******/ 		};
 /******/ 	
@@ -28028,21 +28247,36 @@ module.exports = parseParams
 /******/ 			if(threw) delete __webpack_module_cache__[moduleId];
 /******/ 		}
 /******/ 	
+/******/ 		// Flag the module as loaded
+/******/ 		module.loaded = true;
+/******/ 	
 /******/ 		// Return the exports of the module
 /******/ 		return module.exports;
 /******/ 	}
 /******/ 	
+/******/ 	// expose the module cache
+/******/ 	__nccwpck_require__.c = __webpack_module_cache__;
+/******/ 	
 /************************************************************************/
+/******/ 	/* webpack/runtime/node module decorator */
+/******/ 	(() => {
+/******/ 		__nccwpck_require__.nmd = (module) => {
+/******/ 			module.paths = [];
+/******/ 			if (!module.children) module.children = [];
+/******/ 			return module;
+/******/ 		};
+/******/ 	})();
+/******/ 	
 /******/ 	/* webpack/runtime/compat */
 /******/ 	
 /******/ 	if (typeof __nccwpck_require__ !== 'undefined') __nccwpck_require__.ab = __dirname + "/";
 /******/ 	
 /************************************************************************/
 /******/ 	
+/******/ 	// module cache are used so entry inlining is disabled
 /******/ 	// startup
 /******/ 	// Load entry module and return exports
-/******/ 	// This entry module is referenced by other modules so it can't be inlined
-/******/ 	var __webpack_exports__ = __nccwpck_require__(6209);
+/******/ 	var __webpack_exports__ = __nccwpck_require__(__nccwpck_require__.s = 6209);
 /******/ 	module.exports = __webpack_exports__;
 /******/ 	
 /******/ })()

@@ -1,6 +1,6 @@
 import * as core from "@actions/core";
-import { ScalewayClient, pollStatus } from "../shared";
-import type { ContainerDomain, ScalewayRegion } from "../shared/types";
+import { ScalewayClient, pollStatus, validateRegion } from "../shared";
+import type { ContainerDomain } from "../shared/types";
 
 const DOMAINS_API = "/containers/v1beta1/regions/{region}/domains";
 
@@ -46,11 +46,22 @@ async function detachDomain(client: ScalewayClient): Promise<void> {
   core.info(`Domain ${domainId} detached`);
 }
 
+/**
+ * container-domain action entry point.
+ *
+ * Dispatches to one of two sub-operations based on the `action` input:
+ *   - "attach": creates a domain mapping and polls until DNS propagation and
+ *     TLS certificate provisioning complete (up to 5 minutes).
+ *   - "detach": deletes an existing domain mapping immediately.
+ *
+ * Outputs for attach: domain_id, url, status.
+ * Outputs for detach: domain_id, status="deleted".
+ */
 async function run(): Promise<void> {
   try {
     const action = core.getInput("action", { required: true });
     const secretKey = core.getInput("secret_key", { required: true });
-    const region = core.getInput("region") as ScalewayRegion;
+    const region = validateRegion(core.getInput("region"));
 
     core.setSecret(secretKey);
 
@@ -71,4 +82,7 @@ async function run(): Promise<void> {
   }
 }
 
-run();
+export { run };
+if (require.main === module) {
+  run();
+}

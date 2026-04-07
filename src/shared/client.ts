@@ -159,7 +159,9 @@ export function formatScalewayErrorMessage(data: unknown, httpStatus: number): s
   return joined;
 }
 
+/** Number of attempts for a single request before giving up (covers 429 and 5xx). */
 const MAX_RETRIES = 3;
+/** Base delay in ms; doubles on each retry (1 s → 2 s → 4 s). */
 const RETRY_DELAY_MS = 1000;
 
 export interface RequestOptions {
@@ -184,8 +186,14 @@ export function isTransientResourceError(error: unknown): boolean {
   return false;
 }
 
+/**
+ * Max deploy-trigger attempts. Higher than MAX_RETRIES because Scaleway can
+ * hold a container in a transient state for up to ~30 s after a config PATCH.
+ */
 const DEPLOY_TRANSIENT_MAX_ATTEMPTS = 15;
+/** Initial back-off before the first deploy retry (ms). */
 const DEPLOY_TRANSIENT_INITIAL_DELAY_MS = 2_000;
+/** Cap on per-retry delay to prevent excessive waits (ms). */
 const DEPLOY_TRANSIENT_MAX_DELAY_MS = 30_000;
 
 /**
@@ -223,6 +231,17 @@ export async function postContainerDeploy(
   throw new Error("postContainerDeploy: exhausted retries");
 }
 
+/**
+ * HTTP client for the Scaleway API.
+ *
+ * Wraps `fetch` with:
+ * - Automatic `X-Auth-Token` authentication.
+ * - Retry on `429 Too Many Requests` and `5xx` errors (up to MAX_RETRIES
+ *   attempts with exponential back-off starting at RETRY_DELAY_MS).
+ * - Network errors (fetch throws) are also retried.
+ * - All other HTTP errors (4xx except 429) are thrown immediately as
+ *   `ScalewayApiError` without retrying.
+ */
 export class ScalewayClient {
   private secretKey: string;
   public region: ScalewayRegion;
@@ -244,6 +263,12 @@ export class ScalewayClient {
     return `${API_BASE}${resolved}`;
   }
 
+  /**
+   * Execute an authenticated HTTP request with retry logic.
+   *
+   * Set `opts.logFailureAsDebug` to suppress the `core.error` log on failure
+   * (useful for callers that retry expected transient errors themselves).
+   */
   async request<T = unknown>(opts: RequestOptions): Promise<T> {
     const url = this.buildUrl(opts.path);
     const headers: Record<string, string> = {

@@ -5,8 +5,19 @@ import type { PollOptions, PollResult } from "./types";
 const DEFAULT_INTERVAL_MS = 5_000;
 
 /**
- * Poll a Scaleway GET endpoint until the status field matches a success or
- * failure value, or the timeout is exceeded.
+ * Poll a Scaleway GET endpoint until a terminal status is reached.
+ *
+ * On each iteration the response JSON is inspected for `options.statusField`
+ * (default: `"status"`). If the field is absent the status is treated as
+ * `"unknown"` and polling continues. Once a success status is seen the result
+ * is returned; once a failure status is seen an error is thrown immediately.
+ * If `timeoutMs` elapses before any terminal status is reached an error is
+ * also thrown.
+ *
+ * @param client  An authenticated ScalewayClient used for GET requests.
+ * @param options Poll configuration — URL, status sets, timeout, and interval.
+ * @returns       A PollResult containing the terminal status and the full
+ *                response body typed as T.
  */
 export async function pollStatus<T = unknown>(
   client: ScalewayClient,

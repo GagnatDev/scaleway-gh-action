@@ -1,13 +1,23 @@
 import * as core from "@actions/core";
-import { ScalewayClient, pollStatus } from "../shared";
-import type { JobRun, ScalewayRegion } from "../shared/types";
+import { ScalewayClient, pollStatus, validateRegion } from "../shared";
+import type { JobRun } from "../shared/types";
 
 const JOBS_API = "/serverless-jobs/v1alpha1/regions/{region}";
 
+/**
+ * job-run action entry point.
+ *
+ * Starts a Serverless Job run for the given job definition.
+ * When `wait=true` (the default) polls until the run reaches a terminal
+ * status and calls `core.setFailed` if the job does not succeed.
+ * When `wait=false` returns immediately after starting the job.
+ *
+ * Outputs: job_run_id, status, duration_seconds (only when wait=true).
+ */
 async function run(): Promise<void> {
   try {
     const secretKey = core.getInput("secret_key", { required: true });
-    const region = core.getInput("region") as ScalewayRegion;
+    const region = validateRegion(core.getInput("region"));
     const jobDefinitionId = core.getInput("job_definition_id", { required: true });
     const shouldWait = core.getInput("wait") !== "false";
     const timeoutSeconds = parseInt(core.getInput("timeout_seconds") || "600", 10);
@@ -79,4 +89,7 @@ async function run(): Promise<void> {
   }
 }
 
-run();
+export { run };
+if (require.main === module) {
+  run();
+}

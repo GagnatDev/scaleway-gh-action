@@ -1,13 +1,31 @@
 import * as core from "@actions/core";
-import { ScalewayClient, pollStatus, postContainerDeploy } from "../shared";
-import type { Container, ScalewayRegion } from "../shared/types";
+import {
+  ScalewayClient,
+  pollStatus,
+  postContainerDeploy,
+  getOptionalIntInput,
+  getOptionalStringInput,
+  getOptionalJsonInput,
+  validateRegion,
+} from "../shared";
+import type { Container } from "../shared/types";
 
 const CONTAINERS_API = "/containers/v1beta1/regions/{region}/containers";
 
+/**
+ * container-deploy action entry point.
+ *
+ * Performs a three-step deploy of an existing Serverless Container:
+ *   1. PATCH the container config (registry image + optional overrides).
+ *   2. POST to the deploy endpoint (retries on transient-state 409/400).
+ *   3. Poll until status is "ready" or a terminal failure status is reached.
+ *
+ * Outputs: status, endpoint_url, deploy_duration_seconds.
+ */
 async function run(): Promise<void> {
   try {
     const secretKey = core.getInput("secret_key", { required: true });
-    const region = core.getInput("region") as ScalewayRegion;
+    const region = validateRegion(core.getInput("region"));
     const containerId = core.getInput("container_id", { required: true });
     const registryImageUrl = core.getInput("registry_image_url", { required: true });
     const timeoutSeconds = parseInt(core.getInput("timeout_seconds") || "300", 10);
@@ -21,31 +39,15 @@ async function run(): Promise<void> {
       registry_image: registryImageUrl,
     };
 
-    const optionalInt = (name: string) => {
-      const v = core.getInput(name);
-      return v ? parseInt(v, 10) : undefined;
-    };
-    const optionalStr = (name: string) => core.getInput(name) || undefined;
-    const optionalJson = (name: string) => {
-      const v = core.getInput(name);
-      if (!v) return undefined;
-      try {
-        return JSON.parse(v);
-      } catch {
-        core.warning(`Failed to parse ${name} as JSON, skipping`);
-        return undefined;
-      }
-    };
-
     const fields: Record<string, unknown> = {
-      min_scale: optionalInt("min_scale"),
-      max_scale: optionalInt("max_scale"),
-      memory_limit: optionalInt("memory_limit"),
-      cpu_limit: optionalInt("cpu_limit"),
-      port: optionalInt("port"),
-      http_option: optionalStr("http_option"),
-      environment_variables: optionalJson("environment_variables"),
-      secret_environment_variables: optionalJson("secret_environment_variables"),
+      min_scale: getOptionalIntInput("min_scale"),
+      max_scale: getOptionalIntInput("max_scale"),
+      memory_limit: getOptionalIntInput("memory_limit"),
+      cpu_limit: getOptionalIntInput("cpu_limit"),
+      port: getOptionalIntInput("port"),
+      http_option: getOptionalStringInput("http_option"),
+      environment_variables: getOptionalJsonInput("environment_variables"),
+      secret_environment_variables: getOptionalJsonInput("secret_environment_variables"),
     };
 
     for (const [key, value] of Object.entries(fields)) {
@@ -89,4 +91,7 @@ async function run(): Promise<void> {
   }
 }
 
-run();
+export { run };
+if (require.main === module) {
+  run();
+}

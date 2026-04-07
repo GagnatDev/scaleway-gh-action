@@ -25682,15 +25682,27 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.run = run;
 const core = __importStar(__nccwpck_require__(6966));
 const exec = __importStar(__nccwpck_require__(2851));
+const shared_1 = __nccwpck_require__(6686);
 function registryHost(region) {
     return `rg.${region}.scw.cloud`;
 }
+/**
+ * registry-login action entry point.
+ *
+ * Runs `docker login` against the Scaleway Container Registry endpoint for
+ * the given region and namespace. Saves the registry URL and the logout flag
+ * in action state so the companion post.ts hook can run `docker logout` at
+ * the end of the job.
+ *
+ * Outputs: registry (the full registry URL, e.g. rg.fr-par.scw.cloud/my-ns).
+ */
 async function run() {
     try {
         const secretKey = core.getInput("secret_key", { required: true });
-        const region = core.getInput("region", { required: false });
+        const region = (0, shared_1.validateRegion)(core.getInput("region", { required: false }));
         const namespace = core.getInput("registry_namespace", { required: true });
         const logout = core.getBooleanInput("logout");
         const host = registryHost(region);
@@ -25719,7 +25731,596 @@ async function run() {
         core.setFailed(error instanceof Error ? error.message : String(error));
     }
 }
-run();
+if (require.main === require.cache[eval('__filename')]) {
+    run();
+}
+
+
+/***/ }),
+
+/***/ 9427:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.ScalewayApiError = exports.ScalewayClient = void 0;
+exports.formatScalewayErrorMessage = formatScalewayErrorMessage;
+exports.isTransientResourceError = isTransientResourceError;
+exports.postContainerDeploy = postContainerDeploy;
+const core = __importStar(__nccwpck_require__(6966));
+const API_BASE = "https://api.scaleway.com";
+function formatInvalidArgumentDetails(details) {
+    return details
+        .map((d) => {
+        const name = d.argument_name ?? "(unknown argument)";
+        let part = name;
+        switch (d.reason) {
+            case "unknown":
+                part += " is invalid for unexpected reason";
+                break;
+            case "required":
+                part += " is required";
+                break;
+            case "format":
+                part += " is wrongly formatted";
+                break;
+            case "constraint":
+                part += " does not respect constraint";
+                break;
+            default:
+                if (d.reason)
+                    part += ` (${d.reason})`;
+        }
+        if (d.help_message)
+            part += `: ${d.help_message}`;
+        return part;
+    })
+        .join("; ");
+}
+function formatPermissionDetails(details) {
+    return details
+        .map((d) => {
+        const action = d.action ?? "?";
+        const resource = d.resource ?? "?";
+        return `${action} on ${resource}`;
+    })
+        .join("; ");
+}
+function formatQuotaDetails(details) {
+    return details
+        .map((d) => {
+        const res = d.resource ?? "resource";
+        return `${res} quota (${d.current ?? "?"}/${d.quota ?? "?"})`;
+    })
+        .join("; ");
+}
+/**
+ * Build a log-friendly message from Scaleway JSON error bodies.
+ * Many APIs return only a generic `message` (e.g. "invalid argument(s)") while
+ * the actionable detail lives in `details`, `fields`, or `type`.
+ */
+function formatScalewayErrorMessage(data, httpStatus) {
+    if (data === null || typeof data !== "object") {
+        return `HTTP ${httpStatus}`;
+    }
+    const body = data;
+    const segments = [];
+    if (body.message)
+        segments.push(body.message);
+    const t = body.type;
+    if (t === "invalid_arguments" && Array.isArray(body.details)) {
+        const parsed = body.details.filter((x) => x !== null && typeof x === "object" && "argument_name" in x);
+        if (parsed.length > 0) {
+            segments.push(formatInvalidArgumentDetails(parsed));
+        }
+    }
+    else if (t === "permissions_denied" && Array.isArray(body.details)) {
+        const parsed = body.details.filter((x) => x !== null && typeof x === "object" && ("resource" in x || "action" in x));
+        if (parsed.length > 0) {
+            segments.push(formatPermissionDetails(parsed));
+        }
+    }
+    else if (t === "quotas_exceeded" && Array.isArray(body.details)) {
+        const parsed = body.details.filter((x) => x !== null && typeof x === "object" && "resource" in x);
+        if (parsed.length > 0) {
+            segments.push(formatQuotaDetails(parsed));
+        }
+    }
+    else if (Array.isArray(body.details) && body.details.length > 0 && !t) {
+        const parsed = body.details.filter((x) => x !== null && typeof x === "object" && "argument_name" in x);
+        if (parsed.length > 0) {
+            segments.push(formatInvalidArgumentDetails(parsed));
+        }
+    }
+    if (body.fields && Object.keys(body.fields).length > 0) {
+        const fieldStr = Object.entries(body.fields)
+            .map(([k, msgs]) => `${k}: ${msgs.join(", ")}`)
+            .join("; ");
+        segments.push(fieldStr);
+    }
+    if (body.resource && body.resource_id) {
+        segments.push(`resource: ${body.resource} (${body.resource_id})`);
+    }
+    if (segments.length === 0) {
+        try {
+            return `HTTP ${httpStatus}: ${JSON.stringify(data)}`;
+        }
+        catch {
+            return `HTTP ${httpStatus}`;
+        }
+    }
+    const joined = segments.join(" — ");
+    if (t === "invalid_arguments" &&
+        Array.isArray(body.details) &&
+        body.details.length === 0) {
+        return `${joined} — (no detail entries; raw: ${JSON.stringify(data)})`;
+    }
+    return joined;
+}
+/** Number of attempts for a single request before giving up (covers 429 and 5xx). */
+const MAX_RETRIES = 3;
+/** Base delay in ms; doubles on each retry (1 s → 2 s → 4 s). */
+const RETRY_DELAY_MS = 1000;
+/** True when Scaleway rejected the request because the resource is busy (e.g. still applying PATCH). */
+function isTransientResourceError(error) {
+    if (!(error instanceof ScalewayApiError))
+        return false;
+    const msg = error.message.toLowerCase();
+    if (msg.includes("transient state"))
+        return true;
+    if (error.statusCode === 409)
+        return true;
+    return false;
+}
+/**
+ * Max deploy-trigger attempts. Higher than MAX_RETRIES because Scaleway can
+ * hold a container in a transient state for up to ~30 s after a config PATCH.
+ */
+const DEPLOY_TRANSIENT_MAX_ATTEMPTS = 15;
+/** Initial back-off before the first deploy retry (ms). */
+const DEPLOY_TRANSIENT_INITIAL_DELAY_MS = 2_000;
+/** Cap on per-retry delay to prevent excessive waits (ms). */
+const DEPLOY_TRANSIENT_MAX_DELAY_MS = 30_000;
+/**
+ * POST to trigger a serverless container deploy, retrying when the API returns
+ * "resource is in a transient state" (common immediately after PATCH).
+ */
+async function postContainerDeploy(client, path, body) {
+    let delayMs = DEPLOY_TRANSIENT_INITIAL_DELAY_MS;
+    for (let attempt = 1; attempt <= DEPLOY_TRANSIENT_MAX_ATTEMPTS; attempt++) {
+        try {
+            return await client.request({
+                method: "POST",
+                path,
+                body,
+                logFailureAsDebug: attempt < DEPLOY_TRANSIENT_MAX_ATTEMPTS,
+            });
+        }
+        catch (error) {
+            if (!isTransientResourceError(error) || attempt >= DEPLOY_TRANSIENT_MAX_ATTEMPTS) {
+                throw error;
+            }
+            core.info(`Deploy not accepted yet (resource transient); waiting ${Math.round(delayMs / 1000)}s before retry ` +
+                `(${attempt}/${DEPLOY_TRANSIENT_MAX_ATTEMPTS})...`);
+            await sleep(delayMs);
+            delayMs = Math.min(Math.round(delayMs * 1.5), DEPLOY_TRANSIENT_MAX_DELAY_MS);
+        }
+    }
+    throw new Error("postContainerDeploy: exhausted retries");
+}
+/**
+ * HTTP client for the Scaleway API.
+ *
+ * Wraps `fetch` with:
+ * - Automatic `X-Auth-Token` authentication.
+ * - Retry on `429 Too Many Requests` and `5xx` errors (up to MAX_RETRIES
+ *   attempts with exponential back-off starting at RETRY_DELAY_MS).
+ * - Network errors (fetch throws) are also retried.
+ * - All other HTTP errors (4xx except 429) are thrown immediately as
+ *   `ScalewayApiError` without retrying.
+ */
+class ScalewayClient {
+    secretKey;
+    region;
+    constructor(config) {
+        this.secretKey = config.secretKey;
+        this.region = config.region;
+    }
+    /**
+     * Build the full URL for a given API path.
+     * Paths should include the product/version prefix, e.g.:
+     *   /containers/v1beta1/regions/{region}/containers
+     *
+     * The literal `{region}` placeholder is replaced with the client's region.
+     */
+    buildUrl(path) {
+        const resolved = path.replace("{region}", this.region);
+        return `${API_BASE}${resolved}`;
+    }
+    /**
+     * Execute an authenticated HTTP request with retry logic.
+     *
+     * Set `opts.logFailureAsDebug` to suppress the `core.error` log on failure
+     * (useful for callers that retry expected transient errors themselves).
+     */
+    async request(opts) {
+        const url = this.buildUrl(opts.path);
+        const headers = {
+            "X-Auth-Token": this.secretKey,
+            "Content-Type": "application/json",
+        };
+        let lastError = null;
+        for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            try {
+                core.debug(`[scaleway] ${opts.method} ${url} (attempt ${attempt})`);
+                const response = await fetch(url, {
+                    method: opts.method,
+                    headers,
+                    body: opts.body ? JSON.stringify(opts.body) : undefined,
+                });
+                if (response.status === 204) {
+                    return {};
+                }
+                const data = await response.json();
+                if (!response.ok) {
+                    const detailMsg = formatScalewayErrorMessage(data, response.status);
+                    const msg = `[${opts.method} ${opts.path}] ${detailMsg}`;
+                    const err = new ScalewayApiError(msg, response.status, data, {
+                        method: opts.method,
+                        path: opts.path,
+                    });
+                    if (opts.logFailureAsDebug) {
+                        core.debug(`Scaleway API error: ${detailMsg}`);
+                    }
+                    else {
+                        core.error(`Scaleway API error: ${detailMsg}`);
+                    }
+                    try {
+                        core.debug(`[scaleway] Error response body: ${JSON.stringify(data)}`);
+                    }
+                    catch {
+                        /* ignore */
+                    }
+                    // Only retry on 429 or 5xx
+                    if (response.status === 429 || response.status >= 500) {
+                        lastError = err;
+                        if (attempt < MAX_RETRIES) {
+                            const delay = RETRY_DELAY_MS * Math.pow(2, attempt - 1);
+                            core.debug(`[scaleway] Retrying in ${delay}ms...`);
+                            await sleep(delay);
+                            continue;
+                        }
+                    }
+                    throw err;
+                }
+                return data;
+            }
+            catch (error) {
+                if (error instanceof ScalewayApiError)
+                    throw error;
+                lastError = error;
+                if (attempt < MAX_RETRIES) {
+                    const delay = RETRY_DELAY_MS * Math.pow(2, attempt - 1);
+                    await sleep(delay);
+                    continue;
+                }
+            }
+        }
+        throw lastError ?? new Error("Request failed after retries");
+    }
+    async get(path) {
+        return this.request({ method: "GET", path });
+    }
+    async post(path, body) {
+        return this.request({ method: "POST", path, body });
+    }
+    async patch(path, body) {
+        return this.request({ method: "PATCH", path, body });
+    }
+    async delete(path) {
+        return this.request({ method: "DELETE", path });
+    }
+}
+exports.ScalewayClient = ScalewayClient;
+class ScalewayApiError extends Error {
+    statusCode;
+    response;
+    request;
+    constructor(message, statusCode, response, request) {
+        super(message);
+        this.statusCode = statusCode;
+        this.response = response;
+        this.request = request;
+        this.name = "ScalewayApiError";
+    }
+}
+exports.ScalewayApiError = ScalewayApiError;
+function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+
+/***/ }),
+
+/***/ 6686:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.validateRegion = exports.getOptionalJsonInput = exports.getOptionalStringInput = exports.getOptionalIntInput = exports.pollStatus = exports.isTransientResourceError = exports.postContainerDeploy = exports.ScalewayApiError = exports.ScalewayClient = void 0;
+var client_1 = __nccwpck_require__(9427);
+Object.defineProperty(exports, "ScalewayClient", ({ enumerable: true, get: function () { return client_1.ScalewayClient; } }));
+Object.defineProperty(exports, "ScalewayApiError", ({ enumerable: true, get: function () { return client_1.ScalewayApiError; } }));
+Object.defineProperty(exports, "postContainerDeploy", ({ enumerable: true, get: function () { return client_1.postContainerDeploy; } }));
+Object.defineProperty(exports, "isTransientResourceError", ({ enumerable: true, get: function () { return client_1.isTransientResourceError; } }));
+var poller_1 = __nccwpck_require__(9634);
+Object.defineProperty(exports, "pollStatus", ({ enumerable: true, get: function () { return poller_1.pollStatus; } }));
+var inputs_1 = __nccwpck_require__(3341);
+Object.defineProperty(exports, "getOptionalIntInput", ({ enumerable: true, get: function () { return inputs_1.getOptionalIntInput; } }));
+Object.defineProperty(exports, "getOptionalStringInput", ({ enumerable: true, get: function () { return inputs_1.getOptionalStringInput; } }));
+Object.defineProperty(exports, "getOptionalJsonInput", ({ enumerable: true, get: function () { return inputs_1.getOptionalJsonInput; } }));
+var validation_1 = __nccwpck_require__(1743);
+Object.defineProperty(exports, "validateRegion", ({ enumerable: true, get: function () { return validation_1.validateRegion; } }));
+__exportStar(__nccwpck_require__(2535), exports);
+
+
+/***/ }),
+
+/***/ 3341:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.getOptionalIntInput = getOptionalIntInput;
+exports.getOptionalStringInput = getOptionalStringInput;
+exports.getOptionalJsonInput = getOptionalJsonInput;
+/**
+ * Helpers for reading optional GitHub Actions inputs.
+ *
+ * Each function returns `undefined` when the input is absent or empty so
+ * callers can do a simple `if (value !== undefined)` guard before including
+ * the field in a request body.
+ */
+const core = __importStar(__nccwpck_require__(6966));
+/** Returns the input parsed as an integer, or `undefined` if the input is empty. */
+function getOptionalIntInput(name) {
+    const v = core.getInput(name);
+    return v ? parseInt(v, 10) : undefined;
+}
+/** Returns the input string, or `undefined` if the input is empty. */
+function getOptionalStringInput(name) {
+    const v = core.getInput(name);
+    return v || undefined;
+}
+/**
+ * Returns the input parsed as JSON, or `undefined` if the input is empty.
+ * Logs a `core.warning` and returns `undefined` when the input is non-empty
+ * but not valid JSON.
+ */
+function getOptionalJsonInput(name) {
+    const v = core.getInput(name);
+    if (!v)
+        return undefined;
+    try {
+        return JSON.parse(v);
+    }
+    catch {
+        core.warning(`Failed to parse ${name} as JSON, skipping`);
+        return undefined;
+    }
+}
+
+
+/***/ }),
+
+/***/ 9634:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.pollStatus = pollStatus;
+const core = __importStar(__nccwpck_require__(6966));
+const DEFAULT_INTERVAL_MS = 5_000;
+/**
+ * Poll a Scaleway GET endpoint until a terminal status is reached.
+ *
+ * On each iteration the response JSON is inspected for `options.statusField`
+ * (default: `"status"`). If the field is absent the status is treated as
+ * `"unknown"` and polling continues. Once a success status is seen the result
+ * is returned; once a failure status is seen an error is thrown immediately.
+ * If `timeoutMs` elapses before any terminal status is reached an error is
+ * also thrown.
+ *
+ * @param client  An authenticated ScalewayClient used for GET requests.
+ * @param options Poll configuration — URL, status sets, timeout, and interval.
+ * @returns       A PollResult containing the terminal status and the full
+ *                response body typed as T.
+ */
+async function pollStatus(client, options) {
+    const { url, statusField = "status", successStatuses, failureStatuses, timeoutMs, intervalMs = DEFAULT_INTERVAL_MS, } = options;
+    const start = Date.now();
+    while (true) {
+        const elapsed = Date.now() - start;
+        if (elapsed >= timeoutMs) {
+            throw new Error(`Polling timed out after ${Math.round(elapsed / 1000)}s. ` +
+                `Last poll to ${url} did not reach a terminal status.`);
+        }
+        const data = await client.get(url);
+        const status = String(data[statusField] ?? "unknown");
+        core.info(`Status: ${status} (${Math.round(elapsed / 1000)}s elapsed)`);
+        if (successStatuses.has(status)) {
+            return {
+                success: true,
+                status,
+                data: data,
+                elapsedMs: Date.now() - start,
+            };
+        }
+        if (failureStatuses.has(status)) {
+            const errorMsg = data.error_message ?? "Unknown error";
+            throw new Error(`Resource entered failure status "${status}": ${errorMsg}`);
+        }
+        await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+}
+
+
+/***/ }),
+
+/***/ 2535:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+/**
+ * Shared TypeScript interfaces for Scaleway API resources.
+ *
+ * Each interface maps to a resource returned or accepted by a Scaleway API endpoint.
+ * See https://www.scaleway.com/en/developers/api/ for authoritative field documentation.
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+
+
+/***/ }),
+
+/***/ 1743:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.validateRegion = validateRegion;
+const VALID_REGIONS = ["fr-par", "nl-ams", "pl-waw"];
+/**
+ * Validate and narrow a raw string to a `ScalewayRegion`.
+ *
+ * Throws a descriptive error when the value is not one of the supported
+ * regions (`fr-par`, `nl-ams`, `pl-waw`), so callers fail fast with a
+ * useful message rather than a cryptic API error deep in the call stack.
+ */
+function validateRegion(value) {
+    if (!VALID_REGIONS.includes(value)) {
+        throw new Error(`Invalid region "${value}". Must be one of: ${VALID_REGIONS.join(", ")}`);
+    }
+    return value;
+}
 
 
 /***/ }),

@@ -1,15 +1,26 @@
 import * as core from "@actions/core";
 import * as exec from "@actions/exec";
+import { validateRegion } from "../shared";
 import type { ScalewayRegion } from "../shared/types";
 
 function registryHost(region: ScalewayRegion): string {
   return `rg.${region}.scw.cloud`;
 }
 
+/**
+ * registry-login action entry point.
+ *
+ * Runs `docker login` against the Scaleway Container Registry endpoint for
+ * the given region and namespace. Saves the registry URL and the logout flag
+ * in action state so the companion post.ts hook can run `docker logout` at
+ * the end of the job.
+ *
+ * Outputs: registry (the full registry URL, e.g. rg.fr-par.scw.cloud/my-ns).
+ */
 async function run(): Promise<void> {
   try {
     const secretKey = core.getInput("secret_key", { required: true });
-    const region = core.getInput("region", { required: false }) as ScalewayRegion;
+    const region = validateRegion(core.getInput("region", { required: false }));
     const namespace = core.getInput("registry_namespace", { required: true });
     const logout = core.getBooleanInput("logout");
 
@@ -45,4 +56,7 @@ async function run(): Promise<void> {
   }
 }
 
-run();
+export { run };
+if (require.main === module) {
+  run();
+}
