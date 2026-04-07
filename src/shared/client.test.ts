@@ -236,4 +236,104 @@ describe("ScalewayClient", () => {
       vi.useRealTimers();
     }
   });
+
+  it("throws after exhausting all retries on repeated 5xx", async () => {
+    mockFetch
+      .mockResolvedValueOnce(jsonResponse({ message: "Server error" }, 500))
+      .mockResolvedValueOnce(jsonResponse({ message: "Server error" }, 500))
+      .mockResolvedValueOnce(jsonResponse({ message: "Server error" }, 500));
+
+    await expect(
+      client.get("/containers/v1beta1/regions/{region}/containers/abc"),
+    ).rejects.toBeInstanceOf(ScalewayApiError);
+
+    expect(mockFetch).toHaveBeenCalledTimes(3);
+  });
+
+  it("retries on network error (fetch throws) then succeeds", async () => {
+    mockFetch
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockResolvedValueOnce(jsonResponse({ id: "recovered" }));
+
+    const result = await client.get<{ id: string }>(
+      "/containers/v1beta1/regions/{region}/containers/abc",
+    );
+
+    expect(result.id).toBe("recovered");
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("throws after exhausting all retries on repeated network errors", async () => {
+    mockFetch
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"));
+
+    await expect(
+      client.get("/containers/v1beta1/regions/{region}/containers/abc"),
+    ).rejects.toThrow("Failed to fetch");
+
+    expect(mockFetch).toHaveBeenCalledTimes(3);
+  });
+
+  it("does not retry on 403 Forbidden", async () => {
+    mockFetch.mockResolvedValueOnce(
+      jsonResponse({ message: "Forbidden", type: "permissions_denied" }, 403),
+    );
+
+    await expect(
+      client.get("/containers/v1beta1/regions/{region}/containers/abc"),
+    ).rejects.toBeInstanceOf(ScalewayApiError);
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not retry on 404 Not Found", async () => {
+    mockFetch.mockResolvedValueOnce(
+      jsonResponse({ message: "Not found" }, 404),
+    );
+
+    await expect(
+      client.get("/containers/v1beta1/regions/{region}/containers/bad"),
+    ).rejects.toBeInstanceOf(ScalewayApiError);
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("formatScalewayErrorMessage includes raw body when invalid_arguments has empty details", () => {
+    const data = {
+      message: "invalid argument(s)",
+      type: "invalid_arguments",
+      details: [],
+    };
+    const msg = formatScalewayErrorMessage(data, 400);
+    expect(msg).toContain("invalid argument(s)");
+    expect(msg).toContain("raw:");
+  });
+
+  it("formatScalewayErrorMessage formats permissions_denied with action and resource", () => {
+    const msg = formatScalewayErrorMessage(
+      {
+        message: "Insufficient permissions",
+        type: "permissions_denied",
+        details: [{ action: "write", resource: "containers" }],
+      },
+      403,
+    );
+    expect(msg).toContain("write");
+    expect(msg).toContain("containers");
+  });
+
+  it("formatScalewayErrorMessage formats quotas_exceeded with resource and quota", () => {
+    const msg = formatScalewayErrorMessage(
+      {
+        message: "Quota exceeded",
+        type: "quotas_exceeded",
+        details: [{ resource: "containers", current: 10, quota: 10 }],
+      },
+      429,
+    );
+    expect(msg).toContain("containers");
+    expect(msg).toContain("10/10");
+  });
 });
