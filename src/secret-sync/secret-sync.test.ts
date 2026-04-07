@@ -138,6 +138,28 @@ describe("secret-sync", () => {
     );
   });
 
+  it("calls setFailed for an invalid region", async () => {
+    vi.mocked(core.getInput).mockImplementation((name: string) => {
+      const inputs: Record<string, string> = {
+        secret_key: "test-secret-key",
+        region: "ap-southeast-1",
+        project_id: "proj-123",
+        secret_name: "MY_SECRET",
+        secret_value: "super-secret",
+        description: "",
+      };
+      return inputs[name] ?? "";
+    });
+
+    const { run } = await import("./index");
+    await run();
+
+    expect(core.setFailed).toHaveBeenCalledWith(
+      expect.stringContaining("ap-southeast-1"),
+    );
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
   it("base64-encodes the secret value in the version POST body", async () => {
     mockFetch
       .mockResolvedValueOnce(jsonResponse({ secrets: [{ id: "s-1" }], total_count: 1 }))

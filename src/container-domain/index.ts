@@ -1,6 +1,6 @@
 import * as core from "@actions/core";
-import { ScalewayClient, pollStatus } from "../shared";
-import type { ContainerDomain, ScalewayRegion } from "../shared/types";
+import { ScalewayClient, pollStatus, validateRegion } from "../shared";
+import type { ContainerDomain } from "../shared/types";
 
 const DOMAINS_API = "/containers/v1beta1/regions/{region}/domains";
 
@@ -50,7 +50,7 @@ async function run(): Promise<void> {
   try {
     const action = core.getInput("action", { required: true });
     const secretKey = core.getInput("secret_key", { required: true });
-    const region = core.getInput("region") as ScalewayRegion;
+    const region = validateRegion(core.getInput("region"));
 
     core.setSecret(secretKey);
 

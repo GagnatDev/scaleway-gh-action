@@ -6,15 +6,16 @@ import {
   getOptionalIntInput,
   getOptionalStringInput,
   getOptionalJsonInput,
+  validateRegion,
 } from "../shared";
-import type { Container, ScalewayRegion } from "../shared/types";
+import type { Container } from "../shared/types";
 
 const CONTAINERS_API = "/containers/v1beta1/regions/{region}/containers";
 
 async function run(): Promise<void> {
   try {
     const secretKey = core.getInput("secret_key", { required: true });
-    const region = core.getInput("region") as ScalewayRegion;
+    const region = validateRegion(core.getInput("region"));
     const containerId = core.getInput("container_id", { required: true });
     const registryImageUrl = core.getInput("registry_image_url", { required: true });
     const timeoutSeconds = parseInt(core.getInput("timeout_seconds") || "300", 10);

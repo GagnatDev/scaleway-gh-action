@@ -159,6 +159,18 @@ describe("dns-record", () => {
     );
   });
 
+  it("does not validate region because dns-record hardcodes fr-par", async () => {
+    // dns-record intentionally ignores the region input and hardcodes "fr-par"
+    // so any region value (including invalid ones) should not cause a failure
+    setupInputs({ action: "add" });
+    mockFetch.mockResolvedValueOnce(jsonResponse({ records: [{ id: "r-1" }] }));
+
+    const { run } = await import("./index");
+    await run();
+
+    expect(core.setFailed).not.toHaveBeenCalled();
+  });
+
   it("outputs records_changed based on response records count", async () => {
     setupInputs({ action: "add" });
     mockFetch.mockResolvedValueOnce(

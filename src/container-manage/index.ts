@@ -4,8 +4,9 @@ import {
   pollStatus,
   postContainerDeploy,
   getOptionalJsonInput,
+  validateRegion,
 } from "../shared";
-import type { Container, ScalewayRegion } from "../shared/types";
+import type { Container } from "../shared/types";
 
 const CONTAINERS_API = "/containers/v1beta1/regions/{region}/containers";
 
@@ -139,7 +140,7 @@ async function run(): Promise<void> {
   try {
     const action = core.getInput("action", { required: true });
     const secretKey = core.getInput("secret_key", { required: true });
-    const region = core.getInput("region") as ScalewayRegion;
+    const region = validateRegion(core.getInput("region"));
 
     core.setSecret(secretKey);
 

@@ -198,6 +198,20 @@ describe("container-manage", () => {
     });
   });
 
+  describe("invalid region", () => {
+    it("calls setFailed before making any API call", async () => {
+      setupInputs({ action: "create", region: "us-east-1" });
+
+      const { run } = await import("./index");
+      await run();
+
+      expect(core.setFailed).toHaveBeenCalledWith(
+        expect.stringContaining("us-east-1"),
+      );
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+  });
+
   describe("unknown action", () => {
     it("calls setFailed with a helpful message", async () => {
       setupInputs({ action: "restart" });

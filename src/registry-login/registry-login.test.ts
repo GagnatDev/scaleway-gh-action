@@ -76,6 +76,25 @@ describe("registry-login", () => {
     expect(core.saveState).toHaveBeenCalledWith("logout", "true");
   });
 
+  it("calls setFailed for an invalid region", async () => {
+    vi.mocked(core.getInput).mockImplementation((name: string) => {
+      const inputs: Record<string, string> = {
+        secret_key: "test-secret-key",
+        region: "us-west-2",
+        registry_namespace: "my-namespace",
+      };
+      return inputs[name] ?? "";
+    });
+
+    const { run } = await import("./index");
+    await run();
+
+    expect(core.setFailed).toHaveBeenCalledWith(
+      expect.stringContaining("us-west-2"),
+    );
+    expect(exec.getExecOutput).not.toHaveBeenCalled();
+  });
+
   it("calls setFailed when docker login exits with non-zero code", async () => {
     vi.mocked(exec.getExecOutput).mockResolvedValueOnce({
       exitCode: 1,

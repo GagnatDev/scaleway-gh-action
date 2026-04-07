@@ -160,6 +160,22 @@ describe("container-domain", () => {
     });
   });
 
+  describe("invalid region", () => {
+    it("calls setFailed before making any API call", async () => {
+      vi.mocked(core.getInput).mockImplementation((name: string) => {
+        return name === "region" ? "bad-region" : (name === "secret_key" ? "key" : "attach");
+      });
+
+      const { run } = await import("./index");
+      await run();
+
+      expect(core.setFailed).toHaveBeenCalledWith(
+        expect.stringContaining("bad-region"),
+      );
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+  });
+
   describe("unknown action", () => {
     it("calls setFailed with a helpful message", async () => {
       vi.mocked(core.getInput).mockImplementation((name: string) => {

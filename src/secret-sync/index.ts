@@ -1,6 +1,6 @@
 import * as core from "@actions/core";
-import { ScalewayClient } from "../shared";
-import type { Secret, SecretVersion, ScalewayRegion } from "../shared/types";
+import { ScalewayClient, validateRegion } from "../shared";
+import type { Secret, SecretVersion } from "../shared/types";
 
 const SECRETS_API = "/secret-manager/v1beta1/regions/{region}/secrets";
 
@@ -12,7 +12,7 @@ interface ListSecretsResponse {
 async function run(): Promise<void> {
   try {
     const secretKey = core.getInput("secret_key", { required: true });
-    const region = core.getInput("region") as ScalewayRegion;
+    const region = validateRegion(core.getInput("region"));
     const projectId = core.getInput("project_id", { required: true });
     const secretName = core.getInput("secret_name", { required: true });
     const secretValue = core.getInput("secret_value", { required: true });

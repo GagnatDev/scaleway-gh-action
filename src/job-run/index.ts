@@ -1,13 +1,13 @@
 import * as core from "@actions/core";
-import { ScalewayClient, pollStatus } from "../shared";
-import type { JobRun, ScalewayRegion } from "../shared/types";
+import { ScalewayClient, pollStatus, validateRegion } from "../shared";
+import type { JobRun } from "../shared/types";
 
 const JOBS_API = "/serverless-jobs/v1alpha1/regions/{region}";
 
 async function run(): Promise<void> {
   try {
     const secretKey = core.getInput("secret_key", { required: true });
-    const region = core.getInput("region") as ScalewayRegion;
+    const region = validateRegion(core.getInput("region"));
     const jobDefinitionId = core.getInput("job_definition_id", { required: true });
     const shouldWait = core.getInput("wait") !== "false";
     const timeoutSeconds = parseInt(core.getInput("timeout_seconds") || "600", 10);

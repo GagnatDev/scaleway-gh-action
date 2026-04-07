@@ -164,6 +164,27 @@ describe("job-run", () => {
     expect(body.environment_variables).toEqual({ FOO: "bar" });
   });
 
+  it("calls setFailed for an invalid region", async () => {
+    vi.mocked(core.getInput).mockImplementation((name: string) => {
+      const inputs: Record<string, string> = {
+        secret_key: "test-secret-key",
+        region: "eu-west-1",
+        job_definition_id: "jd-123",
+        wait: "false",
+        timeout_seconds: "600",
+      };
+      return inputs[name] ?? "";
+    });
+
+    const { run } = await import("./index");
+    await run();
+
+    expect(core.setFailed).toHaveBeenCalledWith(
+      expect.stringContaining("eu-west-1"),
+    );
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
   it("calls setFailed when the start API returns an error", async () => {
     mockFetch.mockResolvedValueOnce(
       jsonResponse({ message: "job definition not found" }, 404),

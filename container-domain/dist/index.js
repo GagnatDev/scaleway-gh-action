@@ -25723,7 +25723,7 @@ async function run() {
     try {
         const action = core.getInput("action", { required: true });
         const secretKey = core.getInput("secret_key", { required: true });
-        const region = core.getInput("region");
+        const region = (0, shared_1.validateRegion)(core.getInput("region"));
         core.setSecret(secretKey);
         const client = new shared_1.ScalewayClient({ secretKey, region });
         switch (action) {
@@ -26081,7 +26081,7 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.getOptionalJsonInput = exports.getOptionalStringInput = exports.getOptionalIntInput = exports.pollStatus = exports.isTransientResourceError = exports.postContainerDeploy = exports.ScalewayApiError = exports.ScalewayClient = void 0;
+exports.validateRegion = exports.getOptionalJsonInput = exports.getOptionalStringInput = exports.getOptionalIntInput = exports.pollStatus = exports.isTransientResourceError = exports.postContainerDeploy = exports.ScalewayApiError = exports.ScalewayClient = void 0;
 var client_1 = __nccwpck_require__(9427);
 Object.defineProperty(exports, "ScalewayClient", ({ enumerable: true, get: function () { return client_1.ScalewayClient; } }));
 Object.defineProperty(exports, "ScalewayApiError", ({ enumerable: true, get: function () { return client_1.ScalewayApiError; } }));
@@ -26093,6 +26093,8 @@ var inputs_1 = __nccwpck_require__(3341);
 Object.defineProperty(exports, "getOptionalIntInput", ({ enumerable: true, get: function () { return inputs_1.getOptionalIntInput; } }));
 Object.defineProperty(exports, "getOptionalStringInput", ({ enumerable: true, get: function () { return inputs_1.getOptionalStringInput; } }));
 Object.defineProperty(exports, "getOptionalJsonInput", ({ enumerable: true, get: function () { return inputs_1.getOptionalJsonInput; } }));
+var validation_1 = __nccwpck_require__(1743);
+Object.defineProperty(exports, "validateRegion", ({ enumerable: true, get: function () { return validation_1.validateRegion; } }));
 __exportStar(__nccwpck_require__(2535), exports);
 
 
@@ -26248,6 +26250,24 @@ async function pollStatus(client, options) {
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
+
+
+/***/ }),
+
+/***/ 1743:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.validateRegion = validateRegion;
+const VALID_REGIONS = ["fr-par", "nl-ams", "pl-waw"];
+function validateRegion(value) {
+    if (!VALID_REGIONS.includes(value)) {
+        throw new Error(`Invalid region "${value}". Must be one of: ${VALID_REGIONS.join(", ")}`);
+    }
+    return value;
+}
 
 
 /***/ }),

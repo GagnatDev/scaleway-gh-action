@@ -1,5 +1,6 @@
 import * as core from "@actions/core";
 import * as exec from "@actions/exec";
+import { validateRegion } from "../shared";
 import type { ScalewayRegion } from "../shared/types";
 
 function registryHost(region: ScalewayRegion): string {
@@ -9,7 +10,7 @@ function registryHost(region: ScalewayRegion): string {
 async function run(): Promise<void> {
   try {
     const secretKey = core.getInput("secret_key", { required: true });
-    const region = core.getInput("region", { required: false }) as ScalewayRegion;
+    const region = validateRegion(core.getInput("region", { required: false }));
     const namespace = core.getInput("registry_namespace", { required: true });
     const logout = core.getBooleanInput("logout");
 

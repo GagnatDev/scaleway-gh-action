@@ -150,6 +150,20 @@ describe("container-deploy", () => {
     expect(body).toEqual({ registry_image: "rg.fr-par.scw.cloud/ns/image:latest" });
   });
 
+  it("calls setFailed for an invalid region", async () => {
+    vi.mocked(core.getInput).mockImplementation((name: string) => {
+      return name === "region" ? "us-east-1" : (name === "secret_key" ? "key" : "c-123");
+    });
+
+    const { run } = await import("./index");
+    await run();
+
+    expect(core.setFailed).toHaveBeenCalledWith(
+      expect.stringContaining("us-east-1"),
+    );
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
   it("PATCH body includes optional fields when provided", async () => {
     vi.mocked(core.getInput).mockImplementation((name: string) => {
       const inputs: Record<string, string> = {
