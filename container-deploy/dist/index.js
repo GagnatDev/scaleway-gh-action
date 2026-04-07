@@ -25700,32 +25700,15 @@ async function run() {
         const patchBody = {
             registry_image: registryImageUrl,
         };
-        const optionalInt = (name) => {
-            const v = core.getInput(name);
-            return v ? parseInt(v, 10) : undefined;
-        };
-        const optionalStr = (name) => core.getInput(name) || undefined;
-        const optionalJson = (name) => {
-            const v = core.getInput(name);
-            if (!v)
-                return undefined;
-            try {
-                return JSON.parse(v);
-            }
-            catch {
-                core.warning(`Failed to parse ${name} as JSON, skipping`);
-                return undefined;
-            }
-        };
         const fields = {
-            min_scale: optionalInt("min_scale"),
-            max_scale: optionalInt("max_scale"),
-            memory_limit: optionalInt("memory_limit"),
-            cpu_limit: optionalInt("cpu_limit"),
-            port: optionalInt("port"),
-            http_option: optionalStr("http_option"),
-            environment_variables: optionalJson("environment_variables"),
-            secret_environment_variables: optionalJson("secret_environment_variables"),
+            min_scale: (0, shared_1.getOptionalIntInput)("min_scale"),
+            max_scale: (0, shared_1.getOptionalIntInput)("max_scale"),
+            memory_limit: (0, shared_1.getOptionalIntInput)("memory_limit"),
+            cpu_limit: (0, shared_1.getOptionalIntInput)("cpu_limit"),
+            port: (0, shared_1.getOptionalIntInput)("port"),
+            http_option: (0, shared_1.getOptionalStringInput)("http_option"),
+            environment_variables: (0, shared_1.getOptionalJsonInput)("environment_variables"),
+            secret_environment_variables: (0, shared_1.getOptionalJsonInput)("secret_environment_variables"),
         };
         for (const [key, value] of Object.entries(fields)) {
             if (value !== undefined)
@@ -26098,7 +26081,7 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.pollStatus = exports.isTransientResourceError = exports.postContainerDeploy = exports.ScalewayApiError = exports.ScalewayClient = void 0;
+exports.getOptionalJsonInput = exports.getOptionalStringInput = exports.getOptionalIntInput = exports.pollStatus = exports.isTransientResourceError = exports.postContainerDeploy = exports.ScalewayApiError = exports.ScalewayClient = void 0;
 var client_1 = __nccwpck_require__(9427);
 Object.defineProperty(exports, "ScalewayClient", ({ enumerable: true, get: function () { return client_1.ScalewayClient; } }));
 Object.defineProperty(exports, "ScalewayApiError", ({ enumerable: true, get: function () { return client_1.ScalewayApiError; } }));
@@ -26106,7 +26089,78 @@ Object.defineProperty(exports, "postContainerDeploy", ({ enumerable: true, get: 
 Object.defineProperty(exports, "isTransientResourceError", ({ enumerable: true, get: function () { return client_1.isTransientResourceError; } }));
 var poller_1 = __nccwpck_require__(9634);
 Object.defineProperty(exports, "pollStatus", ({ enumerable: true, get: function () { return poller_1.pollStatus; } }));
+var inputs_1 = __nccwpck_require__(3341);
+Object.defineProperty(exports, "getOptionalIntInput", ({ enumerable: true, get: function () { return inputs_1.getOptionalIntInput; } }));
+Object.defineProperty(exports, "getOptionalStringInput", ({ enumerable: true, get: function () { return inputs_1.getOptionalStringInput; } }));
+Object.defineProperty(exports, "getOptionalJsonInput", ({ enumerable: true, get: function () { return inputs_1.getOptionalJsonInput; } }));
 __exportStar(__nccwpck_require__(2535), exports);
+
+
+/***/ }),
+
+/***/ 3341:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.getOptionalIntInput = getOptionalIntInput;
+exports.getOptionalStringInput = getOptionalStringInput;
+exports.getOptionalJsonInput = getOptionalJsonInput;
+const core = __importStar(__nccwpck_require__(6966));
+function getOptionalIntInput(name) {
+    const v = core.getInput(name);
+    return v ? parseInt(v, 10) : undefined;
+}
+function getOptionalStringInput(name) {
+    const v = core.getInput(name);
+    return v || undefined;
+}
+function getOptionalJsonInput(name) {
+    const v = core.getInput(name);
+    if (!v)
+        return undefined;
+    try {
+        return JSON.parse(v);
+    }
+    catch {
+        core.warning(`Failed to parse ${name} as JSON, skipping`);
+        return undefined;
+    }
+}
 
 
 /***/ }),

@@ -1,5 +1,12 @@
 import * as core from "@actions/core";
-import { ScalewayClient, pollStatus, postContainerDeploy } from "../shared";
+import {
+  ScalewayClient,
+  pollStatus,
+  postContainerDeploy,
+  getOptionalIntInput,
+  getOptionalStringInput,
+  getOptionalJsonInput,
+} from "../shared";
 import type { Container, ScalewayRegion } from "../shared/types";
 
 const CONTAINERS_API = "/containers/v1beta1/regions/{region}/containers";
@@ -21,31 +28,15 @@ async function run(): Promise<void> {
       registry_image: registryImageUrl,
     };
 
-    const optionalInt = (name: string) => {
-      const v = core.getInput(name);
-      return v ? parseInt(v, 10) : undefined;
-    };
-    const optionalStr = (name: string) => core.getInput(name) || undefined;
-    const optionalJson = (name: string) => {
-      const v = core.getInput(name);
-      if (!v) return undefined;
-      try {
-        return JSON.parse(v);
-      } catch {
-        core.warning(`Failed to parse ${name} as JSON, skipping`);
-        return undefined;
-      }
-    };
-
     const fields: Record<string, unknown> = {
-      min_scale: optionalInt("min_scale"),
-      max_scale: optionalInt("max_scale"),
-      memory_limit: optionalInt("memory_limit"),
-      cpu_limit: optionalInt("cpu_limit"),
-      port: optionalInt("port"),
-      http_option: optionalStr("http_option"),
-      environment_variables: optionalJson("environment_variables"),
-      secret_environment_variables: optionalJson("secret_environment_variables"),
+      min_scale: getOptionalIntInput("min_scale"),
+      max_scale: getOptionalIntInput("max_scale"),
+      memory_limit: getOptionalIntInput("memory_limit"),
+      cpu_limit: getOptionalIntInput("cpu_limit"),
+      port: getOptionalIntInput("port"),
+      http_option: getOptionalStringInput("http_option"),
+      environment_variables: getOptionalJsonInput("environment_variables"),
+      secret_environment_variables: getOptionalJsonInput("secret_environment_variables"),
     };
 
     for (const [key, value] of Object.entries(fields)) {

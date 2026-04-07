@@ -1,19 +1,13 @@
 import * as core from "@actions/core";
-import { ScalewayClient, pollStatus, postContainerDeploy } from "../shared";
+import {
+  ScalewayClient,
+  pollStatus,
+  postContainerDeploy,
+  getOptionalJsonInput,
+} from "../shared";
 import type { Container, ScalewayRegion } from "../shared/types";
 
 const CONTAINERS_API = "/containers/v1beta1/regions/{region}/containers";
-
-function getOptionalJson(name: string): unknown | undefined {
-  const v = core.getInput(name);
-  if (!v) return undefined;
-  try {
-    return JSON.parse(v);
-  } catch {
-    core.warning(`Failed to parse ${name} as JSON, skipping`);
-    return undefined;
-  }
-}
 
 async function createContainer(client: ScalewayClient): Promise<void> {
   const namespaceId = core.getInput("namespace_id", { required: true });
@@ -37,10 +31,10 @@ async function createContainer(client: ScalewayClient): Promise<void> {
   const desc = core.getInput("description");
   if (desc) body.description = desc;
 
-  const envVars = getOptionalJson("environment_variables");
+  const envVars = getOptionalJsonInput("environment_variables");
   if (envVars) body.environment_variables = envVars;
 
-  const secretEnvVars = getOptionalJson("secret_environment_variables");
+  const secretEnvVars = getOptionalJsonInput("secret_environment_variables");
   if (secretEnvVars) body.secret_environment_variables = secretEnvVars;
 
   core.info(`Creating container "${containerName}" in namespace ${namespaceId}`);
@@ -87,10 +81,10 @@ async function updateContainer(client: ScalewayClient): Promise<void> {
     if (v) body[name] = transform(v);
   }
 
-  const envVars = getOptionalJson("environment_variables");
+  const envVars = getOptionalJsonInput("environment_variables");
   if (envVars) body.environment_variables = envVars;
 
-  const secretEnvVars = getOptionalJson("secret_environment_variables");
+  const secretEnvVars = getOptionalJsonInput("secret_environment_variables");
   if (secretEnvVars) body.secret_environment_variables = secretEnvVars;
 
   core.info(`Updating container ${containerId}`);
