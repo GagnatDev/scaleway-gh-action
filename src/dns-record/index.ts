@@ -34,6 +34,21 @@ interface PatchRecordsResponse {
   records: Array<{ id: string; name: string; type: string; data: string; ttl: number }>;
 }
 
+/**
+ * dns-record action entry point.
+ *
+ * Modifies DNS records in a Scaleway DNS zone using a single atomic PATCH
+ * request with a `changes` array. Dispatches based on `action`:
+ *   - "add":    append a new record (fails if record_data is absent).
+ *   - "set":    replace all matching records (fails if record_data is absent).
+ *   - "delete": remove matching records by name+type.
+ *   - "clear":  remove all records matching name+type.
+ *
+ * Note: The Scaleway DNS API is global — the region input is ignored and
+ * "fr-par" is used internally so the client can be constructed.
+ *
+ * Outputs: records_changed (count of records in the API response).
+ */
 async function run(): Promise<void> {
   try {
     const secretKey = core.getInput("secret_key", { required: true });

@@ -12,6 +12,16 @@ import type { Container } from "../shared/types";
 
 const CONTAINERS_API = "/containers/v1beta1/regions/{region}/containers";
 
+/**
+ * container-deploy action entry point.
+ *
+ * Performs a three-step deploy of an existing Serverless Container:
+ *   1. PATCH the container config (registry image + optional overrides).
+ *   2. POST to the deploy endpoint (retries on transient-state 409/400).
+ *   3. Poll until status is "ready" or a terminal failure status is reached.
+ *
+ * Outputs: status, endpoint_url, deploy_duration_seconds.
+ */
 async function run(): Promise<void> {
   try {
     const secretKey = core.getInput("secret_key", { required: true });

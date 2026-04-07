@@ -1,1 +1,1 @@
-{"version":3,"file":"index.d.ts","sourceRoot":"","sources":["file:///home/akgagnat/Projects/scaleway-gh-action/src/dns-record/index.ts"],"names":[],"mappings":"AAoCA,iBAAe,GAAG,IAAI,OAAO,CAAC,IAAI,CAAC,CAwElC;AAED,OAAO,EAAE,GAAG,EAAE,CAAC"}
+{"version":3,"file":"index.d.ts","sourceRoot":"","sources":["file:///home/akgagnat/Projects/scaleway-gh-action/src/dns-record/index.ts"],"names":[],"mappings":"AAoCA;;;;;;;;;;;;;;GAcG;AACH,iBAAe,GAAG,IAAI,OAAO,CAAC,IAAI,CAAC,CAwElC;AAED,OAAO,EAAE,GAAG,EAAE,CAAC"}

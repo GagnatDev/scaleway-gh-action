@@ -46,6 +46,17 @@ async function detachDomain(client: ScalewayClient): Promise<void> {
   core.info(`Domain ${domainId} detached`);
 }
 
+/**
+ * container-domain action entry point.
+ *
+ * Dispatches to one of two sub-operations based on the `action` input:
+ *   - "attach": creates a domain mapping and polls until DNS propagation and
+ *     TLS certificate provisioning complete (up to 5 minutes).
+ *   - "detach": deletes an existing domain mapping immediately.
+ *
+ * Outputs for attach: domain_id, url, status.
+ * Outputs for detach: domain_id, status="deleted".
+ */
 async function run(): Promise<void> {
   try {
     const action = core.getInput("action", { required: true });

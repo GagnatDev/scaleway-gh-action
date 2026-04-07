@@ -25685,6 +25685,14 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.post = post;
 const core = __importStar(__nccwpck_require__(6966));
 const exec = __importStar(__nccwpck_require__(2851));
+/**
+ * registry-login post-action hook.
+ *
+ * Runs automatically at the end of the GitHub Actions job. Reads the registry
+ * and logout flag saved by the main action and, if logout is enabled, runs
+ * `docker logout` to remove the stored credentials. Failures are surfaced as
+ * warnings rather than errors so the overall job result is not affected.
+ */
 async function post() {
     const registry = core.getState("registry");
     const logout = core.getState("logout");

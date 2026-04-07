@@ -9,6 +9,18 @@ interface ListSecretsResponse {
   total_count: number;
 }
 
+/**
+ * secret-sync action entry point.
+ *
+ * Creates or updates a secret in Scaleway Secret Manager using a
+ * create-or-update pattern:
+ *   1. Look up the secret by name in the project.
+ *   2. If it does not exist, create it (and optionally set its description).
+ *   3. If it exists and a description is provided, update the description.
+ *   4. Always create a new version with the provided value (base64-encoded).
+ *
+ * Outputs: secret_id, version_number.
+ */
 async function run(): Promise<void> {
   try {
     const secretKey = core.getInput("secret_key", { required: true });

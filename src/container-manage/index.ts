@@ -136,6 +136,18 @@ async function waitForReady(client: ScalewayClient, containerId: string): Promis
   core.info(`Container ready. Endpoint: https://${container.domain_name}`);
 }
 
+/**
+ * container-manage action entry point.
+ *
+ * Dispatches to one of three sub-operations based on the `action` input:
+ *   - "create": creates a new container; optionally deploys and waits.
+ *   - "update": patches an existing container; optionally deploys and waits.
+ *   - "delete": deletes an existing container.
+ *
+ * Outputs for create/update: container_id, status, endpoint_url
+ * (status and endpoint_url are only set when wait=true).
+ * Outputs for delete: container_id, status="deleted".
+ */
 async function run(): Promise<void> {
   try {
     const action = core.getInput("action", { required: true });

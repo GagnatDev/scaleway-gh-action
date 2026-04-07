@@ -1,3 +1,11 @@
+/**
+ * Shared TypeScript interfaces for Scaleway API resources.
+ *
+ * Each interface maps to a resource returned or accepted by a Scaleway API endpoint.
+ * See https://www.scaleway.com/en/developers/api/ for authoritative field documentation.
+ */
+
+/** The three Scaleway regions supported by these actions. */
 export type ScalewayRegion = "fr-par" | "nl-ams" | "pl-waw";
 
 export interface ScalewayClientConfig {
@@ -14,7 +22,7 @@ export interface ScalewayErrorResponse {
 export interface PollOptions {
   /** URL to poll via GET */
   url: string;
-  /** Field in the JSON response that holds the status string */
+  /** Field in the JSON response that holds the status string. Defaults to "status". */
   statusField?: string;
   /** Set of status values that mean "done successfully" */
   successStatuses: Set<string>;
@@ -35,6 +43,7 @@ export interface PollResult<T = unknown> {
 
 // --- Container Registry types ---
 
+/** A Scaleway Container Registry namespace that hosts Docker images. */
 export interface RegistryNamespace {
   id: string;
   name: string;
@@ -47,12 +56,16 @@ export interface RegistryNamespace {
 
 // --- Serverless Containers types ---
 
+/**
+ * Lifecycle status of a Serverless Container.
+ * Terminal statuses: "ready" (success), "error" (failure), "locked" (failure).
+ */
 export type ContainerStatus =
   | "unknown"
-  | "ready"
+  | "ready"       // terminal success
   | "deleting"
-  | "error"
-  | "locked"
+  | "error"       // terminal failure
+  | "locked"      // terminal failure
   | "creating"
   | "pending"
   | "created";
@@ -61,11 +74,14 @@ export type ContainerPrivacy = "unknown_privacy" | "public" | "private";
 export type ContainerProtocol = "unknown_protocol" | "http1" | "h2c";
 export type ContainerHttpOption = "unknown_http_option" | "enabled" | "redirected";
 
+/** A secret environment variable reference stored in the container config. */
 export interface SecretEnvVar {
   key: string;
+  /** Present when the value is fetched with permissions; absent in list responses. */
   value?: string;
 }
 
+/** A Scaleway Serverless Container resource. */
 export interface Container {
   id: string;
   name: string;
@@ -90,6 +106,7 @@ export interface Container {
   region: string;
 }
 
+/** A Scaleway Serverless Container namespace (groups containers). */
 export interface ContainerNamespace {
   id: string;
   name: string;
@@ -101,10 +118,12 @@ export interface ContainerNamespace {
   region: string;
 }
 
+/** A custom domain mapping attached to a Serverless Container. */
 export interface ContainerDomain {
   id: string;
   hostname: string;
   container_id: string;
+  /** Public HTTPS URL once DNS and TLS are provisioned. */
   url: string;
   status: string;
   error_message: string | null;
@@ -112,16 +131,21 @@ export interface ContainerDomain {
 
 // --- Serverless Jobs types ---
 
+/**
+ * Lifecycle status of a Serverless Job run.
+ * Terminal statuses: "succeeded" (success), "failed" / "canceled" / "internal_error" (failure).
+ */
 export type JobRunStatus =
   | "unknown_status"
   | "queued"
   | "scheduled"
   | "running"
-  | "succeeded"
-  | "failed"
-  | "canceled"
-  | "internal_error";
+  | "succeeded"       // terminal success
+  | "failed"          // terminal failure
+  | "canceled"        // terminal failure
+  | "internal_error"; // terminal failure
 
+/** The definition of a Serverless Job (template). */
 export interface JobDefinition {
   id: string;
   name: string;
@@ -133,6 +157,7 @@ export interface JobDefinition {
   region: string;
 }
 
+/** A single execution instance of a JobDefinition. */
 export interface JobRun {
   id: string;
   job_definition_id: string;
@@ -148,6 +173,7 @@ export interface JobRun {
 
 // --- Secret Manager types ---
 
+/** A named secret in Scaleway Secret Manager (holds versioned values). */
 export interface Secret {
   id: string;
   project_id: string;
@@ -160,6 +186,7 @@ export interface Secret {
   region: string;
 }
 
+/** A single version of a Secret (immutable once created). */
 export interface SecretVersion {
   revision: number;
   secret_id: string;
@@ -169,14 +196,17 @@ export interface SecretVersion {
   description: string;
 }
 
+/** Response from accessing (reading) a SecretVersion value. */
 export interface SecretVersionAccess {
   secret_id: string;
   revision: number;
-  data: string; // base64
+  /** Base64-encoded secret value. */
+  data: string;
 }
 
 // --- DNS types ---
 
+/** A single DNS record in a Scaleway DNS zone. */
 export interface DnsRecord {
   id: string;
   name: string;
@@ -187,6 +217,7 @@ export interface DnsRecord {
   comment?: string;
 }
 
+/** A Scaleway DNS zone. */
 export interface DnsZone {
   domain: string;
   subdomain: string;

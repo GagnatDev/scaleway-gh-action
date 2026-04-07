@@ -25689,6 +25689,16 @@ const shared_1 = __nccwpck_require__(6686);
 function registryHost(region) {
     return `rg.${region}.scw.cloud`;
 }
+/**
+ * registry-login action entry point.
+ *
+ * Runs `docker login` against the Scaleway Container Registry endpoint for
+ * the given region and namespace. Saves the registry URL and the logout flag
+ * in action state so the companion post.ts hook can run `docker logout` at
+ * the end of the job.
+ *
+ * Outputs: registry (the full registry URL, e.g. rg.fr-par.scw.cloud/my-ns).
+ */
 async function run() {
     try {
         const secretKey = core.getInput("secret_key", { required: true });
@@ -25881,7 +25891,9 @@ function formatScalewayErrorMessage(data, httpStatus) {
     }
     return joined;
 }
+/** Number of attempts for a single request before giving up (covers 429 and 5xx). */
 const MAX_RETRIES = 3;
+/** Base delay in ms; doubles on each retry (1 s → 2 s → 4 s). */
 const RETRY_DELAY_MS = 1000;
 /** True when Scaleway rejected the request because the resource is busy (e.g. still applying PATCH). */
 function isTransientResourceError(error) {
@@ -25894,8 +25906,14 @@ function isTransientResourceError(error) {
         return true;
     return false;
 }
+/**
+ * Max deploy-trigger attempts. Higher than MAX_RETRIES because Scaleway can
+ * hold a container in a transient state for up to ~30 s after a config PATCH.
+ */
 const DEPLOY_TRANSIENT_MAX_ATTEMPTS = 15;
+/** Initial back-off before the first deploy retry (ms). */
 const DEPLOY_TRANSIENT_INITIAL_DELAY_MS = 2_000;
+/** Cap on per-retry delay to prevent excessive waits (ms). */
 const DEPLOY_TRANSIENT_MAX_DELAY_MS = 30_000;
 /**
  * POST to trigger a serverless container deploy, retrying when the API returns
@@ -25924,6 +25942,17 @@ async function postContainerDeploy(client, path, body) {
     }
     throw new Error("postContainerDeploy: exhausted retries");
 }
+/**
+ * HTTP client for the Scaleway API.
+ *
+ * Wraps `fetch` with:
+ * - Automatic `X-Auth-Token` authentication.
+ * - Retry on `429 Too Many Requests` and `5xx` errors (up to MAX_RETRIES
+ *   attempts with exponential back-off starting at RETRY_DELAY_MS).
+ * - Network errors (fetch throws) are also retried.
+ * - All other HTTP errors (4xx except 429) are thrown immediately as
+ *   `ScalewayApiError` without retrying.
+ */
 class ScalewayClient {
     secretKey;
     region;
@@ -25942,6 +25971,12 @@ class ScalewayClient {
         const resolved = path.replace("{region}", this.region);
         return `${API_BASE}${resolved}`;
     }
+    /**
+     * Execute an authenticated HTTP request with retry logic.
+     *
+     * Set `opts.logFailureAsDebug` to suppress the `core.error` log on failure
+     * (useful for callers that retry expected transient errors themselves).
+     */
     async request(opts) {
         const url = this.buildUrl(opts.path);
         const headers = {
@@ -26122,15 +26157,29 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.getOptionalIntInput = getOptionalIntInput;
 exports.getOptionalStringInput = getOptionalStringInput;
 exports.getOptionalJsonInput = getOptionalJsonInput;
+/**
+ * Helpers for reading optional GitHub Actions inputs.
+ *
+ * Each function returns `undefined` when the input is absent or empty so
+ * callers can do a simple `if (value !== undefined)` guard before including
+ * the field in a request body.
+ */
 const core = __importStar(__nccwpck_require__(6966));
+/** Returns the input parsed as an integer, or `undefined` if the input is empty. */
 function getOptionalIntInput(name) {
     const v = core.getInput(name);
     return v ? parseInt(v, 10) : undefined;
 }
+/** Returns the input string, or `undefined` if the input is empty. */
 function getOptionalStringInput(name) {
     const v = core.getInput(name);
     return v || undefined;
 }
+/**
+ * Returns the input parsed as JSON, or `undefined` if the input is empty.
+ * Logs a `core.warning` and returns `undefined` when the input is non-empty
+ * but not valid JSON.
+ */
 function getOptionalJsonInput(name) {
     const v = core.getInput(name);
     if (!v)
@@ -26190,8 +26239,19 @@ exports.pollStatus = pollStatus;
 const core = __importStar(__nccwpck_require__(6966));
 const DEFAULT_INTERVAL_MS = 5_000;
 /**
- * Poll a Scaleway GET endpoint until the status field matches a success or
- * failure value, or the timeout is exceeded.
+ * Poll a Scaleway GET endpoint until a terminal status is reached.
+ *
+ * On each iteration the response JSON is inspected for `options.statusField`
+ * (default: `"status"`). If the field is absent the status is treated as
+ * `"unknown"` and polling continues. Once a success status is seen the result
+ * is returned; once a failure status is seen an error is thrown immediately.
+ * If `timeoutMs` elapses before any terminal status is reached an error is
+ * also thrown.
+ *
+ * @param client  An authenticated ScalewayClient used for GET requests.
+ * @param options Poll configuration — URL, status sets, timeout, and interval.
+ * @returns       A PollResult containing the terminal status and the full
+ *                response body typed as T.
  */
 async function pollStatus(client, options) {
     const { url, statusField = "status", successStatuses, failureStatuses, timeoutMs, intervalMs = DEFAULT_INTERVAL_MS, } = options;
@@ -26229,6 +26289,12 @@ async function pollStatus(client, options) {
 
 "use strict";
 
+/**
+ * Shared TypeScript interfaces for Scaleway API resources.
+ *
+ * Each interface maps to a resource returned or accepted by a Scaleway API endpoint.
+ * See https://www.scaleway.com/en/developers/api/ for authoritative field documentation.
+ */
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 
 
@@ -26242,6 +26308,13 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.validateRegion = validateRegion;
 const VALID_REGIONS = ["fr-par", "nl-ams", "pl-waw"];
+/**
+ * Validate and narrow a raw string to a `ScalewayRegion`.
+ *
+ * Throws a descriptive error when the value is not one of the supported
+ * regions (`fr-par`, `nl-ams`, `pl-waw`), so callers fail fast with a
+ * useful message rather than a cryptic API error deep in the call stack.
+ */
 function validateRegion(value) {
     if (!VALID_REGIONS.includes(value)) {
         throw new Error(`Invalid region "${value}". Must be one of: ${VALID_REGIONS.join(", ")}`);
