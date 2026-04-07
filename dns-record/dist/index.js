@@ -25682,6 +25682,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.run = run;
 const core = __importStar(__nccwpck_require__(6966));
 const shared_1 = __nccwpck_require__(6686);
 const DNS_API = "/domain/v2beta1/dns-zones";
@@ -25746,7 +25747,9 @@ async function run() {
         core.setFailed(error instanceof Error ? error.message : String(error));
     }
 }
-run();
+if (require.main === require.cache[eval('__filename')]) {
+    run();
+}
 
 
 /***/ }),
@@ -25792,6 +25795,8 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.ScalewayApiError = exports.ScalewayClient = void 0;
 exports.formatScalewayErrorMessage = formatScalewayErrorMessage;
+exports.isTransientResourceError = isTransientResourceError;
+exports.postContainerDeploy = postContainerDeploy;
 const core = __importStar(__nccwpck_require__(6966));
 const API_BASE = "https://api.scaleway.com";
 function formatInvalidArgumentDetails(details) {
@@ -25904,6 +25909,47 @@ function formatScalewayErrorMessage(data, httpStatus) {
 }
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1000;
+/** True when Scaleway rejected the request because the resource is busy (e.g. still applying PATCH). */
+function isTransientResourceError(error) {
+    if (!(error instanceof ScalewayApiError))
+        return false;
+    const msg = error.message.toLowerCase();
+    if (msg.includes("transient state"))
+        return true;
+    if (error.statusCode === 409)
+        return true;
+    return false;
+}
+const DEPLOY_TRANSIENT_MAX_ATTEMPTS = 15;
+const DEPLOY_TRANSIENT_INITIAL_DELAY_MS = 2_000;
+const DEPLOY_TRANSIENT_MAX_DELAY_MS = 30_000;
+/**
+ * POST to trigger a serverless container deploy, retrying when the API returns
+ * "resource is in a transient state" (common immediately after PATCH).
+ */
+async function postContainerDeploy(client, path, body) {
+    let delayMs = DEPLOY_TRANSIENT_INITIAL_DELAY_MS;
+    for (let attempt = 1; attempt <= DEPLOY_TRANSIENT_MAX_ATTEMPTS; attempt++) {
+        try {
+            return await client.request({
+                method: "POST",
+                path,
+                body,
+                logFailureAsDebug: attempt < DEPLOY_TRANSIENT_MAX_ATTEMPTS,
+            });
+        }
+        catch (error) {
+            if (!isTransientResourceError(error) || attempt >= DEPLOY_TRANSIENT_MAX_ATTEMPTS) {
+                throw error;
+            }
+            core.info(`Deploy not accepted yet (resource transient); waiting ${Math.round(delayMs / 1000)}s before retry ` +
+                `(${attempt}/${DEPLOY_TRANSIENT_MAX_ATTEMPTS})...`);
+            await sleep(delayMs);
+            delayMs = Math.min(Math.round(delayMs * 1.5), DEPLOY_TRANSIENT_MAX_DELAY_MS);
+        }
+    }
+    throw new Error("postContainerDeploy: exhausted retries");
+}
 class ScalewayClient {
     secretKey;
     region;
@@ -25948,7 +25994,12 @@ class ScalewayClient {
                         method: opts.method,
                         path: opts.path,
                     });
-                    core.error(`Scaleway API error: ${detailMsg}`);
+                    if (opts.logFailureAsDebug) {
+                        core.debug(`Scaleway API error: ${detailMsg}`);
+                    }
+                    else {
+                        core.error(`Scaleway API error: ${detailMsg}`);
+                    }
                     try {
                         core.debug(`[scaleway] Error response body: ${JSON.stringify(data)}`);
                     }
@@ -26036,10 +26087,12 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.pollStatus = exports.ScalewayApiError = exports.ScalewayClient = void 0;
+exports.pollStatus = exports.isTransientResourceError = exports.postContainerDeploy = exports.ScalewayApiError = exports.ScalewayClient = void 0;
 var client_1 = __nccwpck_require__(9427);
 Object.defineProperty(exports, "ScalewayClient", ({ enumerable: true, get: function () { return client_1.ScalewayClient; } }));
 Object.defineProperty(exports, "ScalewayApiError", ({ enumerable: true, get: function () { return client_1.ScalewayApiError; } }));
+Object.defineProperty(exports, "postContainerDeploy", ({ enumerable: true, get: function () { return client_1.postContainerDeploy; } }));
+Object.defineProperty(exports, "isTransientResourceError", ({ enumerable: true, get: function () { return client_1.isTransientResourceError; } }));
 var poller_1 = __nccwpck_require__(9634);
 Object.defineProperty(exports, "pollStatus", ({ enumerable: true, get: function () { return poller_1.pollStatus; } }));
 __exportStar(__nccwpck_require__(2535), exports);

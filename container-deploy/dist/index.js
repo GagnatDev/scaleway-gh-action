@@ -25644,9 +25644,10 @@ module.exports = {
 /***/ }),
 
 /***/ 3262:
-/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+/***/ (function(module, exports, __nccwpck_require__) {
 
 "use strict";
+/* module decorator */ module = __nccwpck_require__.nmd(module);
 
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
@@ -25682,6 +25683,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.run = run;
 const core = __importStar(__nccwpck_require__(6966));
 const shared_1 = __nccwpck_require__(6686);
 const CONTAINERS_API = "/containers/v1beta1/regions/{region}/containers";
@@ -25756,7 +25758,9 @@ async function run() {
         core.setFailed(error instanceof Error ? error.message : String(error));
     }
 }
-run();
+if (__nccwpck_require__.c[__nccwpck_require__.s] === module) {
+    run();
+}
 
 
 /***/ }),
@@ -28081,8 +28085,8 @@ module.exports = parseParams
 /******/ 		}
 /******/ 		// Create a new module (and put it into the cache)
 /******/ 		var module = __webpack_module_cache__[moduleId] = {
-/******/ 			// no module.id needed
-/******/ 			// no module.loaded needed
+/******/ 			id: moduleId,
+/******/ 			loaded: false,
 /******/ 			exports: {}
 /******/ 		};
 /******/ 	
@@ -28095,21 +28099,36 @@ module.exports = parseParams
 /******/ 			if(threw) delete __webpack_module_cache__[moduleId];
 /******/ 		}
 /******/ 	
+/******/ 		// Flag the module as loaded
+/******/ 		module.loaded = true;
+/******/ 	
 /******/ 		// Return the exports of the module
 /******/ 		return module.exports;
 /******/ 	}
 /******/ 	
+/******/ 	// expose the module cache
+/******/ 	__nccwpck_require__.c = __webpack_module_cache__;
+/******/ 	
 /************************************************************************/
+/******/ 	/* webpack/runtime/node module decorator */
+/******/ 	(() => {
+/******/ 		__nccwpck_require__.nmd = (module) => {
+/******/ 			module.paths = [];
+/******/ 			if (!module.children) module.children = [];
+/******/ 			return module;
+/******/ 		};
+/******/ 	})();
+/******/ 	
 /******/ 	/* webpack/runtime/compat */
 /******/ 	
 /******/ 	if (typeof __nccwpck_require__ !== 'undefined') __nccwpck_require__.ab = __dirname + "/";
 /******/ 	
 /************************************************************************/
 /******/ 	
+/******/ 	// module cache are used so entry inlining is disabled
 /******/ 	// startup
 /******/ 	// Load entry module and return exports
-/******/ 	// This entry module is referenced by other modules so it can't be inlined
-/******/ 	var __webpack_exports__ = __nccwpck_require__(3262);
+/******/ 	var __webpack_exports__ = __nccwpck_require__(__nccwpck_require__.s = 3262);
 /******/ 	module.exports = __webpack_exports__;
 /******/ 	
 /******/ })()

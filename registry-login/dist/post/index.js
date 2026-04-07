@@ -25682,6 +25682,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.post = post;
 const core = __importStar(__nccwpck_require__(6966));
 const exec = __importStar(__nccwpck_require__(2851));
 async function post() {
@@ -25709,7 +25710,9 @@ async function post() {
         core.warning(error instanceof Error ? error.message : String(error));
     }
 }
-post();
+if (require.main === require.cache[eval('__filename')]) {
+    post();
+}
 
 
 /***/ }),

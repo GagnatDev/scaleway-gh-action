@@ -169,4 +169,7 @@ async function run(): Promise<void> {
   }
 }
 
-run();
+export { run };
+if (require.main === module) {
+  run();
+}

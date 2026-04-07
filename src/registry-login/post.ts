@@ -31,4 +31,7 @@ async function post(): Promise<void> {
   }
 }
 
-post();
+export { post };
+if (require.main === module) {
+  post();
+}

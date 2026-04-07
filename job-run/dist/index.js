@@ -25644,9 +25644,10 @@ module.exports = {
 /***/ }),
 
 /***/ 6254:
-/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+/***/ (function(module, exports, __nccwpck_require__) {
 
 "use strict";
+/* module decorator */ module = __nccwpck_require__.nmd(module);
 
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
@@ -25682,6 +25683,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.run = run;
 const core = __importStar(__nccwpck_require__(6966));
 const shared_1 = __nccwpck_require__(6686);
 const JOBS_API = "/serverless-jobs/v1alpha1/regions/{region}";
@@ -25746,7 +25748,9 @@ async function run() {
         core.setFailed(error instanceof Error ? error.message : String(error));
     }
 }
-run();
+if (__nccwpck_require__.c[__nccwpck_require__.s] === module) {
+    run();
+}
 
 
 /***/ }),
@@ -25792,6 +25796,8 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.ScalewayApiError = exports.ScalewayClient = void 0;
 exports.formatScalewayErrorMessage = formatScalewayErrorMessage;
+exports.isTransientResourceError = isTransientResourceError;
+exports.postContainerDeploy = postContainerDeploy;
 const core = __importStar(__nccwpck_require__(6966));
 const API_BASE = "https://api.scaleway.com";
 function formatInvalidArgumentDetails(details) {
@@ -25904,6 +25910,47 @@ function formatScalewayErrorMessage(data, httpStatus) {
 }
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1000;
+/** True when Scaleway rejected the request because the resource is busy (e.g. still applying PATCH). */
+function isTransientResourceError(error) {
+    if (!(error instanceof ScalewayApiError))
+        return false;
+    const msg = error.message.toLowerCase();
+    if (msg.includes("transient state"))
+        return true;
+    if (error.statusCode === 409)
+        return true;
+    return false;
+}
+const DEPLOY_TRANSIENT_MAX_ATTEMPTS = 15;
+const DEPLOY_TRANSIENT_INITIAL_DELAY_MS = 2_000;
+const DEPLOY_TRANSIENT_MAX_DELAY_MS = 30_000;
+/**
+ * POST to trigger a serverless container deploy, retrying when the API returns
+ * "resource is in a transient state" (common immediately after PATCH).
+ */
+async function postContainerDeploy(client, path, body) {
+    let delayMs = DEPLOY_TRANSIENT_INITIAL_DELAY_MS;
+    for (let attempt = 1; attempt <= DEPLOY_TRANSIENT_MAX_ATTEMPTS; attempt++) {
+        try {
+            return await client.request({
+                method: "POST",
+                path,
+                body,
+                logFailureAsDebug: attempt < DEPLOY_TRANSIENT_MAX_ATTEMPTS,
+            });
+        }
+        catch (error) {
+            if (!isTransientResourceError(error) || attempt >= DEPLOY_TRANSIENT_MAX_ATTEMPTS) {
+                throw error;
+            }
+            core.info(`Deploy not accepted yet (resource transient); waiting ${Math.round(delayMs / 1000)}s before retry ` +
+                `(${attempt}/${DEPLOY_TRANSIENT_MAX_ATTEMPTS})...`);
+            await sleep(delayMs);
+            delayMs = Math.min(Math.round(delayMs * 1.5), DEPLOY_TRANSIENT_MAX_DELAY_MS);
+        }
+    }
+    throw new Error("postContainerDeploy: exhausted retries");
+}
 class ScalewayClient {
     secretKey;
     region;
@@ -25948,7 +25995,12 @@ class ScalewayClient {
                         method: opts.method,
                         path: opts.path,
                     });
-                    core.error(`Scaleway API error: ${detailMsg}`);
+                    if (opts.logFailureAsDebug) {
+                        core.debug(`Scaleway API error: ${detailMsg}`);
+                    }
+                    else {
+                        core.error(`Scaleway API error: ${detailMsg}`);
+                    }
                     try {
                         core.debug(`[scaleway] Error response body: ${JSON.stringify(data)}`);
                     }
@@ -26036,10 +26088,12 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.pollStatus = exports.ScalewayApiError = exports.ScalewayClient = void 0;
+exports.pollStatus = exports.isTransientResourceError = exports.postContainerDeploy = exports.ScalewayApiError = exports.ScalewayClient = void 0;
 var client_1 = __nccwpck_require__(9427);
 Object.defineProperty(exports, "ScalewayClient", ({ enumerable: true, get: function () { return client_1.ScalewayClient; } }));
 Object.defineProperty(exports, "ScalewayApiError", ({ enumerable: true, get: function () { return client_1.ScalewayApiError; } }));
+Object.defineProperty(exports, "postContainerDeploy", ({ enumerable: true, get: function () { return client_1.postContainerDeploy; } }));
+Object.defineProperty(exports, "isTransientResourceError", ({ enumerable: true, get: function () { return client_1.isTransientResourceError; } }));
 var poller_1 = __nccwpck_require__(9634);
 Object.defineProperty(exports, "pollStatus", ({ enumerable: true, get: function () { return poller_1.pollStatus; } }));
 __exportStar(__nccwpck_require__(2535), exports);
@@ -28021,8 +28075,8 @@ module.exports = parseParams
 /******/ 		}
 /******/ 		// Create a new module (and put it into the cache)
 /******/ 		var module = __webpack_module_cache__[moduleId] = {
-/******/ 			// no module.id needed
-/******/ 			// no module.loaded needed
+/******/ 			id: moduleId,
+/******/ 			loaded: false,
 /******/ 			exports: {}
 /******/ 		};
 /******/ 	
@@ -28035,21 +28089,36 @@ module.exports = parseParams
 /******/ 			if(threw) delete __webpack_module_cache__[moduleId];
 /******/ 		}
 /******/ 	
+/******/ 		// Flag the module as loaded
+/******/ 		module.loaded = true;
+/******/ 	
 /******/ 		// Return the exports of the module
 /******/ 		return module.exports;
 /******/ 	}
 /******/ 	
+/******/ 	// expose the module cache
+/******/ 	__nccwpck_require__.c = __webpack_module_cache__;
+/******/ 	
 /************************************************************************/
+/******/ 	/* webpack/runtime/node module decorator */
+/******/ 	(() => {
+/******/ 		__nccwpck_require__.nmd = (module) => {
+/******/ 			module.paths = [];
+/******/ 			if (!module.children) module.children = [];
+/******/ 			return module;
+/******/ 		};
+/******/ 	})();
+/******/ 	
 /******/ 	/* webpack/runtime/compat */
 /******/ 	
 /******/ 	if (typeof __nccwpck_require__ !== 'undefined') __nccwpck_require__.ab = __dirname + "/";
 /******/ 	
 /************************************************************************/
 /******/ 	
+/******/ 	// module cache are used so entry inlining is disabled
 /******/ 	// startup
 /******/ 	// Load entry module and return exports
-/******/ 	// This entry module is referenced by other modules so it can't be inlined
-/******/ 	var __webpack_exports__ = __nccwpck_require__(6254);
+/******/ 	var __webpack_exports__ = __nccwpck_require__(__nccwpck_require__.s = 6254);
 /******/ 	module.exports = __webpack_exports__;
 /******/ 	
 /******/ })()

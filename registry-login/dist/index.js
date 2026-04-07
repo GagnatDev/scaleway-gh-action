@@ -25682,6 +25682,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.run = run;
 const core = __importStar(__nccwpck_require__(6966));
 const exec = __importStar(__nccwpck_require__(2851));
 function registryHost(region) {
@@ -25719,7 +25720,9 @@ async function run() {
         core.setFailed(error instanceof Error ? error.message : String(error));
     }
 }
-run();
+if (require.main === require.cache[eval('__filename')]) {
+    run();
+}
 
 
 /***/ }),
