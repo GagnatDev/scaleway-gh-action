@@ -26137,7 +26137,33 @@ function parseSecretEnvVars(raw) {
     const trimmed = raw.trim();
     if (!trimmed)
         return [];
-    const parsed = (0, yaml_1.parse)(trimmed);
+    let parsed;
+    try {
+        parsed = (0, yaml_1.parse)(trimmed);
+    }
+    catch (error) {
+        const errorCode = error &&
+            typeof error === "object" &&
+            "code" in error &&
+            typeof error.code === "string"
+            ? ` (${error.code})`
+            : "";
+        const linePos = error &&
+            typeof error === "object" &&
+            "linePos" in error &&
+            Array.isArray(error.linePos) &&
+            error.linePos
+                .length > 0
+            ? error.linePos[0]
+            : undefined;
+        const location = linePos &&
+            typeof linePos.line === "number" &&
+            typeof linePos.col === "number"
+            ? ` at line ${linePos.line}, column ${linePos.col}`
+            : "";
+        throw new Error(`Failed to parse secret_environment_variables as YAML${errorCode}. ` +
+            `Provide a valid key: value mapping${location}.`);
+    }
     if (parsed === null || parsed === undefined)
         return [];
     if (typeof parsed !== "object" || Array.isArray(parsed)) {

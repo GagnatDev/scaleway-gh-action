@@ -99,6 +99,26 @@ Update an existing Serverless Container's image and redeploy it, then poll until
     #   DB_HOST: ${{ secrets.DB_HOST }}
 ```
 
+`secret_environment_variables` must be a valid YAML mapping (`KEY: value` per line). For values that span multiple lines (PEM keys, certificates, etc.), use a YAML block scalar so the key stays on one line:
+
+```yaml
+secret_environment_variables: |
+  PUBLIC_KEY: |-
+    -----BEGIN PUBLIC KEY-----
+    line2
+    line3
+    -----END PUBLIC KEY-----
+```
+
+If a GitHub secret may contain quotes, backslashes, or newlines, interpolating it raw can break the YAML. You can emit a JSON string literal instead:
+
+```yaml
+secret_environment_variables: |
+  PRIVATE_KEY: ${{ toJSON(secrets.APP_PRIVATE_KEY) }}
+```
+
+The same pattern applies to [`container-manage`](#container-manage).
+
 **Outputs:**
 - `status` -- Final container status
 - `endpoint_url` -- Public endpoint URL

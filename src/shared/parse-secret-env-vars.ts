@@ -17,7 +17,37 @@ export function parseSecretEnvVars(raw: string): SecretEnvVar[] {
   const trimmed = raw.trim();
   if (!trimmed) return [];
 
-  const parsed: unknown = parseYaml(trimmed);
+  let parsed: unknown;
+  try {
+    parsed = parseYaml(trimmed);
+  } catch (error) {
+    const errorCode =
+      error &&
+      typeof error === "object" &&
+      "code" in error &&
+      typeof (error as { code?: unknown }).code === "string"
+        ? ` (${(error as { code: string }).code})`
+        : "";
+    const linePos =
+      error &&
+      typeof error === "object" &&
+      "linePos" in error &&
+      Array.isArray((error as { linePos?: unknown }).linePos) &&
+      (error as { linePos: Array<{ line?: unknown; col?: unknown }> }).linePos
+        .length > 0
+        ? (error as { linePos: Array<{ line?: unknown; col?: unknown }> }).linePos[0]
+        : undefined;
+    const location =
+      linePos &&
+      typeof linePos.line === "number" &&
+      typeof linePos.col === "number"
+        ? ` at line ${linePos.line}, column ${linePos.col}`
+        : "";
+    throw new Error(
+      `Failed to parse secret_environment_variables as YAML${errorCode}. ` +
+        `Provide a valid key: value mapping${location}.`,
+    );
+  }
 
   if (parsed === null || parsed === undefined) return [];
 

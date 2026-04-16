@@ -82,6 +82,21 @@ describe("parseSecretEnvVars", () => {
     );
   });
 
+  it("does not leak raw input values in YAML parse errors", () => {
+    const raw = "bad\nkey: top-secret-token-value";
+
+    try {
+      parseSecretEnvVars(raw);
+      throw new Error("expected parseSecretEnvVars to throw");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      expect(message).toMatch(/Failed to parse secret_environment_variables as YAML/);
+      expect(message).toMatch(/at line 1, column 1/i);
+      expect(message).not.toContain("top-secret-token-value");
+      expect(message).not.toContain("bad");
+    }
+  });
+
   it("strips trailing newline from block scalar input", () => {
     const raw = "KEY: value\n";
 
