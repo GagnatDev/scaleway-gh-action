@@ -41,7 +41,7 @@ inputs:
     description: "JSON object of environment variables"
     required: false
   secret_environment_variables:
-    description: 'JSON array of secret env vars, e.g. [{"key":"DB_PASS","value":"xxx"}]'
+    description: 'YAML mapping of secret env vars, e.g. "DB_PASS: xxx" (use | block scalar for multiple)'
     required: false
   http_option:
     description: "HTTP handling: enabled or redirected"

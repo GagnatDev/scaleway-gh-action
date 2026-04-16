@@ -1,5 +1,6 @@
 import * as core from "@actions/core";
 import { ScalewayClient, pollStatus, postContainerDeploy } from "../shared";
+import { parseSecretEnvVars } from "../shared/parse-secret-env-vars";
 import type { Container, ScalewayRegion } from "../shared/types";
 
 const CONTAINERS_API = "/containers/v1beta1/regions/{region}/containers";
@@ -45,7 +46,10 @@ async function run(): Promise<void> {
       port: optionalInt("port"),
       http_option: optionalStr("http_option"),
       environment_variables: optionalJson("environment_variables"),
-      secret_environment_variables: optionalJson("secret_environment_variables"),
+      secret_environment_variables: (() => {
+        const raw = core.getInput("secret_environment_variables");
+        return raw ? parseSecretEnvVars(raw) : undefined;
+      })(),
     };
 
     for (const [key, value] of Object.entries(fields)) {

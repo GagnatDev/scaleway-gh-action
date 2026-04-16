@@ -75,7 +75,7 @@ inputs:
     description: "JSON object of environment variables"
     required: false
   secret_environment_variables:
-    description: 'JSON array of secret env vars [{"key":"K","value":"V"}]'
+    description: 'YAML mapping of secret env vars, e.g. "DB_PASS: xxx" (use | block scalar for multiple)'
     required: false
   description:
     description: "Description of the container"

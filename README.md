@@ -94,7 +94,9 @@ Update an existing Serverless Container's image and redeploy it, then poll until
     # port: "8080"
     # http_option: redirected
     # environment_variables: '{"NODE_ENV":"production"}'
-    # secret_environment_variables: '[{"key":"DB_PASS","value":"xxx"}]'
+    # secret_environment_variables: |
+    #   DB_PASS: ${{ secrets.DB_PASS }}
+    #   DB_HOST: ${{ secrets.DB_HOST }}
 ```
 
 **Outputs:**
@@ -122,6 +124,9 @@ Full lifecycle management: create, update, or delete Serverless Containers.
     max_scale: "1"
     deploy: "true"
     wait: "true"
+    # secret_environment_variables: |
+    #   DB_PASS: ${{ secrets.DB_PASS }}
+    #   API_KEY: ${{ secrets.API_KEY }}
 
 # Delete a container
 - uses: gagnatdev/scaleway-gh-action/container-manage@v1

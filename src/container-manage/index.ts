@@ -1,5 +1,6 @@
 import * as core from "@actions/core";
 import { ScalewayClient, pollStatus, postContainerDeploy } from "../shared";
+import { parseSecretEnvVars } from "../shared/parse-secret-env-vars";
 import type { Container, ScalewayRegion } from "../shared/types";
 
 const CONTAINERS_API = "/containers/v1beta1/regions/{region}/containers";
@@ -40,8 +41,8 @@ async function createContainer(client: ScalewayClient): Promise<void> {
   const envVars = getOptionalJson("environment_variables");
   if (envVars) body.environment_variables = envVars;
 
-  const secretEnvVars = getOptionalJson("secret_environment_variables");
-  if (secretEnvVars) body.secret_environment_variables = secretEnvVars;
+  const rawSecret = core.getInput("secret_environment_variables");
+  if (rawSecret) body.secret_environment_variables = parseSecretEnvVars(rawSecret);
 
   core.info(`Creating container "${containerName}" in namespace ${namespaceId}`);
   const container = await client.post<Container>(CONTAINERS_API, body);
@@ -90,8 +91,8 @@ async function updateContainer(client: ScalewayClient): Promise<void> {
   const envVars = getOptionalJson("environment_variables");
   if (envVars) body.environment_variables = envVars;
 
-  const secretEnvVars = getOptionalJson("secret_environment_variables");
-  if (secretEnvVars) body.secret_environment_variables = secretEnvVars;
+  const rawSecret = core.getInput("secret_environment_variables");
+  if (rawSecret) body.secret_environment_variables = parseSecretEnvVars(rawSecret);
 
   core.info(`Updating container ${containerId}`);
   await client.patch<Container>(`${CONTAINERS_API}/${containerId}`, body);
